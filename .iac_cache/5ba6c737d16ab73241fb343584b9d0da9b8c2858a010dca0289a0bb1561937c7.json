@@ -1,0 +1,78 @@
+{
+  "status": "SAT",
+  "resource_address": "aws_iam_role.role_c",
+  "pattern": "PRIVILEGE_ESCALATION_REACHABILITY",
+  "message": "Privilege escalation path found from 'account:111122223333' to 'aws_iam_role.role_c' in 3 hop(s)",
+  "witness": {
+    "entry_point": "account:111122223333",
+    "target_resource": "aws_iam_role.role_c",
+    "path_length": 3,
+    "hops": [
+      {
+        "from": "account:111122223333",
+        "to": "aws_iam_role.role_a",
+        "trust_statement": {
+          "effect": "Allow",
+          "actions": [
+            "sts:AssumeRole"
+          ],
+          "resources": [],
+          "principal": {
+            "AWS": "arn:aws:iam::111122223333:root"
+          }
+        },
+        "identity_statement": null
+      },
+      {
+        "from": "aws_iam_role.role_a",
+        "to": "aws_iam_role.role_b",
+        "trust_statement": {
+          "effect": "Allow",
+          "actions": [
+            "sts:AssumeRole"
+          ],
+          "resources": [],
+          "principal": {
+            "AWS": "arn:aws:iam::111122223333:role/role_a"
+          }
+        },
+        "identity_statement": {
+          "effect": "Allow",
+          "actions": [
+            "sts:AssumeRole"
+          ],
+          "resources": [
+            "arn:aws:iam::222233334444:role/role_b"
+          ],
+          "principal": null
+        }
+      },
+      {
+        "from": "aws_iam_role.role_b",
+        "to": "aws_iam_role.role_c",
+        "trust_statement": {
+          "effect": "Allow",
+          "actions": [
+            "sts:AssumeRole"
+          ],
+          "resources": [],
+          "principal": {
+            "AWS": "arn:aws:iam::222233334444:role/role_b"
+          }
+        },
+        "identity_statement": {
+          "effect": "Allow",
+          "actions": [
+            "sts:AssumeRole"
+          ],
+          "resources": [
+            "arn:aws:iam::333344445555:role/role_c"
+          ],
+          "principal": null
+        }
+      }
+    ]
+  },
+  "unsat_core": null,
+  "z3_proof_sexpr": null
+}

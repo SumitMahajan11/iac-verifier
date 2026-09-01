@@ -1,0 +1,9 @@
+{
+  "status": "UNRESOLVABLE",
+  "resource_address": "graph",
+  "pattern": "PRIVILEGE_ESCALATION_REACHABILITY",
+  "message": "Privilege escalation verification unresolvable due to bad/unresolved trust data: Role 'aws_iam_role.unresolved_trust_role' has unresolved rule source: Contains unresolved reference inside jsonencode: 'jsonencode({'Version': '2012-10-17', 'Statement': [{'Effect': 'Allow', 'Principal': {'AWS': 'module.unparsed_module.role_arn'}, 'Action': 'sts:AssumeRole'}]})'",
+  "witness": null,
+  "unsat_core": null,
+  "z3_proof_sexpr": null
+}

@@ -421,7 +421,7 @@ def extract_rule_sources(res_type: str, processed_attrs: dict[str, Any]) -> list
     return rule_sources
 
 
-def build_graph(parsed: dict[str, Any]) -> ResourceGraph:
+def build_graph(parsed: dict[str, Any], file_path: str | None = None) -> ResourceGraph:
     """Walks parsed HCL structure and constructs a ResourceGraph populated with resources and rule sources."""
     graph = ResourceGraph()
     resource_blocks = parsed.get("resource", [])
@@ -461,6 +461,7 @@ def build_graph(parsed: dict[str, Any]) -> ResourceGraph:
                     type=res_type,
                     attributes=processed_attrs,
                     rule_sources=rule_sources,
+                    file_path=file_path,
                 )
                 graph.add_resource(resource)
 

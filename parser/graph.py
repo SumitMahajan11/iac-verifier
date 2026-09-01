@@ -91,6 +91,7 @@ class Resource:
     attributes: dict[str, AttributeValue] = field(default_factory=dict)
     rule_sources: list[RuleSource] = field(default_factory=list)
     merged_into: str | None = None
+    file_path: str | None = None
 
 
 def _has_unresolved(val: Any) -> bool:

@@ -1,0 +1,9 @@
+{
+  "status": "UNRESOLVABLE",
+  "resource_address": "aws_iam_policy.unresolved_mixed",
+  "pattern": "IAM_WILDCARD_ALLOW",
+  "message": "Unable to verify IAM policy due to unresolved data: Evaluation scope contains unresolved policy statement: Contains unresolved reference inside jsonencode: 'jsonencode({'Version': '2012-10-17', 'Statement': [{'Effect': 'Allow', 'Action': ['s3:GetObject'], 'Resource': ['arn:aws:s3:::my-bucket/*']}, {'Effect': 'Allow', 'Action': ['s3:PutObject'], 'Resource': '${data.aws_iam_policy_document.external.json}'}]})'",
+  "witness": null,
+  "unsat_core": null,
+  "z3_proof_sexpr": null
+}

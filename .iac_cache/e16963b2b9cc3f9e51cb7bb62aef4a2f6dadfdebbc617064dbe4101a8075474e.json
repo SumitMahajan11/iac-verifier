@@ -1,0 +1,24 @@
+{
+  "status": "SAT",
+  "resource_address": "aws_s3_bucket_policy.wildcard_sat",
+  "pattern": "IAM_WILDCARD_ALLOW",
+  "message": "IAM resource 'aws_s3_bucket_policy.wildcard_sat' grants wildcard permissions",
+  "witness": {
+    "resource": "aws_s3_bucket_policy.wildcard_sat",
+    "smt_counterexample_action": "*",
+    "smt_counterexample_resource": "*",
+    "wildcard_statements": [
+      {
+        "effect": "Allow",
+        "actions": [
+          "s3:*"
+        ],
+        "resources": [
+          "*"
+        ]
+      }
+    ]
+  },
+  "unsat_core": null,
+  "z3_proof_sexpr": null
+}

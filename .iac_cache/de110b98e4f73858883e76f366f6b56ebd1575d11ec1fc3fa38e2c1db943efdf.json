@@ -1,0 +1,9 @@
+{
+  "status": "UNSAT",
+  "resource_address": "aws_iam_policy.wildcard_with_deny",
+  "pattern": "IAM_WILDCARD_ALLOW",
+  "message": "IAM resource 'aws_iam_policy.wildcard_with_deny' is safe from wildcard permissions",
+  "witness": null,
+  "unsat_core": null,
+  "z3_proof_sexpr": "(let ((a!1 (not (or (and (or true) (or true)))))\n      (a!4 (monotonicity (rewrite (= (or true) true))\n                         (rewrite (= (or true) true))\n                         (= (and (or true) (or true)) (and true true))))\n      (a!6 (= (not (and (or true) (or true))) (not true)))\n      (a!7 (= (not (and (or true) (or true))) false)))\n(let ((a!2 (and (or (and (or true) (or true))) a!1))\n      (a!5 (trans a!4\n                  (rewrite (= (and true true) true))\n                  (= (and (or true) (or true)) true))))\n(let ((a!3 (not-or-elim (and-elim (asserted a!2) a!1)\n                        (not (and (or true) (or true)))))\n      (a!8 (trans (monotonicity a!5 a!6) (rewrite (= (not true) false)) a!7)))\n  (mp a!3 a!8 false))))"
+}

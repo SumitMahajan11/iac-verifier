@@ -4,6 +4,10 @@ import ipaddress
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 import z3
+import json
+import hashlib
+import dataclasses
+import os
 
 z3.set_param("proof", True)
 
@@ -29,6 +33,7 @@ from parser.graph import (
     IamPolicyStatement,
     Resource,
     ResourceGraph,
+    ResourceReference,
     SecurityGroupRule,
     Unresolved,
 )
@@ -50,11 +55,79 @@ class VerificationResult:
     z3_proof_sexpr: Optional[str] = None
 
 
+def _default_encoder(obj):
+    if dataclasses.is_dataclass(obj):
+        return dataclasses.asdict(obj)
+    if isinstance(obj, set):
+        return sorted(list(obj))
+    return str(obj)
+
+def compute_cache_key(graph: ResourceGraph, resource_address: str, pattern: str) -> str:
+    res_list = [resource_address]
+    
+    if pattern == "PRIVILEGE_ESCALATION_REACHABILITY":
+        res_list = sorted(list(graph.resources.keys()))
+    else:
+        deps = set([resource_address])
+        resource = graph.resources.get(resource_address)
+        if resource:
+            for addr, r in graph.resources.items():
+                if r.merged_into == resource_address:
+                    deps.add(addr)
+                    policy_arn = r.attributes.get("policy_arn")
+                    if isinstance(policy_arn, ResourceReference):
+                        deps.add(policy_arn.target_address)
+            
+            for rs in resource.rule_sources:
+                if isinstance(rs, SecurityGroupRule):
+                    if isinstance(rs.referenced_security_group_id, ResourceReference):
+                        deps.add(rs.referenced_security_group_id.target_address)
+                    elif isinstance(rs.referenced_security_group_id, str):
+                        deps.add(rs.referenced_security_group_id)
+        
+        res_list = sorted(list(deps))
+    
+    state = [("meta_pattern", pattern), ("meta_address", resource_address)]
+    for addr in res_list:
+        r = graph.resources.get(addr)
+        if r:
+            state.append((addr, dataclasses.asdict(r)))
+    
+    data_str = json.dumps(state, default=_default_encoder, sort_keys=True)
+    return hashlib.sha256(data_str.encode("utf-8")).hexdigest()
+
+class VerificationCache:
+    def __init__(self, cache_dir: str = ".iac_cache"):
+        self.cache_dir = cache_dir
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir, exist_ok=True)
+
+    def get(self, key: str) -> Optional[VerificationResult]:
+        path = os.path.join(self.cache_dir, f"{key}.json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                    return VerificationResult(**data)
+            except Exception:
+                pass
+        return None
+
+    def put(self, key: str, result: VerificationResult):
+        path = os.path.join(self.cache_dir, f"{key}.json")
+        try:
+            with open(path, "w") as f:
+                json.dump(dataclasses.asdict(result), f, indent=2)
+        except Exception:
+            pass
+
 class VerificationEngine:
     """
     Z3 SMT Solver interface and verification orchestrator.
     Encodes resource graphs into symbolic Z3 SMT constraints and checks safety.
     """
+    def __init__(self, use_cache: bool = True):
+        self.cache = VerificationCache() if use_cache else None
 
     def verify_graph(self, graph: ResourceGraph) -> List[VerificationResult]:
         results: List[VerificationResult] = []
@@ -66,13 +139,29 @@ class VerificationEngine:
 
             # Check Pattern 1: Security Group Over-Exposure
             if resource.type in ("aws_security_group", "aws_security_group_rule"):
-                res = self.verify_security_group(resource)
+                res = None
+                cache_key = None
+                if self.cache:
+                    cache_key = compute_cache_key(graph, address, "SG_OVER_EXPOSURE")
+                    res = self.cache.get(cache_key)
+                if not res:
+                    res = self.verify_security_group(resource)
+                    if res and self.cache and cache_key:
+                        self.cache.put(cache_key, res)
                 if res:
                     results.append(res)
 
             # Check Pattern 2: IAM Wildcard Privileges
             if resource.type in ("aws_iam_role", "aws_iam_policy", "aws_iam_role_policy", "aws_iam_user_policy", "aws_iam_group_policy", "aws_s3_bucket_policy"):
-                res = self.verify_iam_policy(resource)
+                res = None
+                cache_key = None
+                if self.cache:
+                    cache_key = compute_cache_key(graph, address, "IAM_WILDCARD_ALLOW")
+                    res = self.cache.get(cache_key)
+                if not res:
+                    res = self.verify_iam_policy(resource)
+                    if res and self.cache and cache_key:
+                        self.cache.put(cache_key, res)
                 if res:
                     results.append(res)
 
@@ -247,14 +336,24 @@ class VerificationEngine:
         """
         trust_graph = build_trust_graph(graph)
 
+        cache_key = None
+        if self.cache:
+            cache_key = compute_cache_key(graph, target_resource or "graph", "PRIVILEGE_ESCALATION_REACHABILITY")
+            cached_res = self.cache.get(cache_key)
+            if cached_res:
+                return cached_res
+
         if trust_graph.unresolvable_roles:
             reasons_summary = "; ".join(trust_graph.unresolvable_reasons)
-            return VerificationResult(
+            res = VerificationResult(
                 status="UNRESOLVABLE",
                 resource_address=target_resource or "graph",
                 pattern="PRIVILEGE_ESCALATION_REACHABILITY",
                 message=f"Privilege escalation verification unresolvable due to bad/unresolved trust data: {reasons_summary}",
             )
+            if self.cache and cache_key:
+                self.cache.put(cache_key, res)
+            return res
 
         # Identify target roles
         target_roles: set[str] = set()
@@ -293,20 +392,26 @@ class VerificationEngine:
         k, is_complete = compute_hop_bound(role_count, configured_cap)
 
         if not target_roles or not trust_graph.external_entry_points:
-            return VerificationResult(
+            res = VerificationResult(
                 status="UNSAT",
                 resource_address=target_resource or "graph",
                 pattern="PRIVILEGE_ESCALATION_REACHABILITY",
                 message="Privilege escalation complete proof of unreachability (no target roles or external entry points found)",
             )
+            if self.cache and cache_key:
+                self.cache.put(cache_key, res)
+            return res
 
         if k == 0:
-            return VerificationResult(
+            res = VerificationResult(
                 status="UNSAT" if is_complete else "UNSAT_BOUNDED",
                 resource_address=target_resource or "graph",
                 pattern="PRIVILEGE_ESCALATION_REACHABILITY",
                 message="Privilege escalation unreachability proof (0 role nodes in graph)",
             )
+            if self.cache and cache_key:
+                self.cache.put(cache_key, res)
+            return res
 
         # Iterative shortening / shortest-reachable-path query (1 to k bounds)
         for current_k in range(1, k + 1):
@@ -323,20 +428,26 @@ class VerificationEngine:
             if check_res == z3.sat:
                 model = solver.model()
                 witness = extract_witness_from_model(model, hop_vars, trust_graph)
-                return VerificationResult(
+                res = VerificationResult(
                     status="SAT",
                     resource_address=witness.get("target_resource", target_resource or "graph"),
                     pattern="PRIVILEGE_ESCALATION_REACHABILITY",
                     message=f"Privilege escalation path found from '{witness['entry_point']}' to '{witness['target_resource']}' in {witness['path_length']} hop(s)",
                     witness=witness,
                 )
+                if self.cache and cache_key:
+                    self.cache.put(cache_key, res)
+                return res
             elif check_res == z3.unknown:
-                return VerificationResult(
+                res = VerificationResult(
                     status="UNKNOWN",
                     resource_address=target_resource or "graph",
                     pattern="PRIVILEGE_ESCALATION_REACHABILITY",
                     message=f"Z3 solver returned UNKNOWN during reachability check at hop {current_k}",
                 )
+                if self.cache and cache_key:
+                    self.cache.put(cache_key, res)
+                return res
 
         # If we exhausted k hops without finding a path
         proof_str = None
@@ -347,7 +458,7 @@ class VerificationEngine:
             proof_str = None
 
         if is_complete:
-            return VerificationResult(
+            res = VerificationResult(
                 status="UNSAT",
                 resource_address=target_resource or "graph",
                 pattern="PRIVILEGE_ESCALATION_REACHABILITY",
@@ -355,11 +466,89 @@ class VerificationEngine:
                 z3_proof_sexpr=proof_str,
             )
         else:
-            return VerificationResult(
+            res = VerificationResult(
                 status="UNSAT_BOUNDED",
                 resource_address=target_resource or "graph",
                 pattern="PRIVILEGE_ESCALATION_REACHABILITY",
                 message=f"No privilege escalation path found within bounded limit of {k} hops ({role_count} roles total)",
                 z3_proof_sexpr=proof_str,
             )
+            
+        if self.cache and cache_key:
+            self.cache.put(cache_key, res)
+        return res
 
+    def verify_incremental(self, graph: ResourceGraph, changed_files: List[str]) -> List[VerificationResult]:
+        """
+        Incrementally verify only the resources affected by changed_files.
+        This relies on the dependency-aware VerificationCache to detect which
+        cache keys have changed. It returns ONLY the VerificationResult for
+        resources that needed re-verification.
+        """
+        results = []
+        changed_files_set = set(os.path.abspath(f) for f in changed_files)
+        
+        # Identify resources whose file_path is in changed_files
+        directly_modified = set()
+        for address, resource in graph.resources.items():
+            if resource.file_path and os.path.abspath(resource.file_path) in changed_files_set:
+                directly_modified.add(address)
+
+        for address, resource in graph.resources.items():
+            if resource.merged_into is not None:
+                continue
+
+            if resource.type in ("aws_security_group", "aws_security_group_rule"):
+                cache_key = compute_cache_key(graph, address, "SG_OVER_EXPOSURE")
+                deps = set([address])
+                for addr, r in graph.resources.items():
+                    if r.merged_into == address:
+                        deps.add(addr)
+                        policy_arn = r.attributes.get("policy_arn")
+                        if isinstance(policy_arn, ResourceReference):
+                            deps.add(policy_arn.target_address)
+                for rs in resource.rule_sources:
+                    if getattr(rs, "referenced_security_group_id", None):
+                        if isinstance(rs.referenced_security_group_id, ResourceReference):
+                            deps.add(rs.referenced_security_group_id.target_address)
+                        elif isinstance(rs.referenced_security_group_id, str):
+                            deps.add(rs.referenced_security_group_id)
+                
+                is_affected = any(dep in directly_modified for dep in deps)
+                
+                if is_affected or not self.cache or not self.cache.get(cache_key):
+                    res = self.verify_security_group(resource)
+                    if res:
+                        if self.cache:
+                            self.cache.put(cache_key, res)
+                        results.append(res)
+                        
+            elif resource.type in ("aws_iam_role", "aws_iam_policy", "aws_iam_role_policy", "aws_iam_user_policy", "aws_iam_group_policy", "aws_s3_bucket_policy"):
+                cache_key = compute_cache_key(graph, address, "IAM_WILDCARD_ALLOW")
+                deps = set([address])
+                for addr, r in graph.resources.items():
+                    if r.merged_into == address:
+                        deps.add(addr)
+                        policy_arn = r.attributes.get("policy_arn")
+                        if isinstance(policy_arn, ResourceReference):
+                            deps.add(policy_arn.target_address)
+                
+                is_affected = any(dep in directly_modified for dep in deps)
+                
+                if is_affected or not self.cache or not self.cache.get(cache_key):
+                    res = self.verify_iam_policy(resource)
+                    if res:
+                        if self.cache:
+                            self.cache.put(cache_key, res)
+                        results.append(res)
+                        
+        # Privilege escalation is global, if its cache key changed, re-run
+        cache_key = compute_cache_key(graph, "graph", "PRIVILEGE_ESCALATION_REACHABILITY")
+        if not self.cache or not self.cache.get(cache_key):
+            res = self.verify_privilege_escalation(graph)
+            if res:
+                if self.cache:
+                    self.cache.put(cache_key, res)
+                results.append(res)
+
+        return results

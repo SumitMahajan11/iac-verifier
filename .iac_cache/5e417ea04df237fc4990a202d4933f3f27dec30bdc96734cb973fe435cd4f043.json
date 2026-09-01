@@ -1,0 +1,29 @@
+{
+  "status": "SAT",
+  "resource_address": "aws_security_group.unsafe_egress",
+  "pattern": "SG_OVER_EXPOSURE",
+  "message": "Security group 'aws_security_group.unsafe_egress' exposes sensitive ports to public IP range",
+  "witness": {
+    "resource": "aws_security_group.unsafe_egress",
+    "sensitive_ports": [
+      21,
+      22,
+      23,
+      3389,
+      445
+    ],
+    "smt_counterexample_ip": "0.0.0.0",
+    "violating_rules": [
+      {
+        "direction": "egress",
+        "from_port": 0,
+        "to_port": 0,
+        "cidr_blocks": [
+          "0.0.0.0/0"
+        ]
+      }
+    ]
+  },
+  "unsat_core": null,
+  "z3_proof_sexpr": null
+}
