@@ -216,7 +216,7 @@
         "file": "fixtures/corpora/terragoat/terraform/aws/db-app.tf",
         "resource_id": "aws_security_group.default",
         "vulnerability_class": "SG_EXPOSURE",
-        "expected_engine_state": "UNSAT"
+        "expected_engine_state": "SAT"
     },
     {
         "corpus": "sadcloud",

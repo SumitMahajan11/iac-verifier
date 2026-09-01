@@ -60,6 +60,10 @@ class VerificationEngine:
         results: List[VerificationResult] = []
 
         for address, resource in graph.resources.items():
+            # Skip resources that were merged into a parent resource
+            if resource.merged_into is not None:
+                continue
+
             # Check Pattern 1: Security Group Over-Exposure
             if resource.type in ("aws_security_group", "aws_security_group_rule"):
                 res = self.verify_security_group(resource)
@@ -67,7 +71,7 @@ class VerificationEngine:
                     results.append(res)
 
             # Check Pattern 2: IAM Wildcard Privileges
-            if resource.type in ("aws_iam_role", "aws_iam_policy", "aws_iam_role_policy", "aws_iam_user_policy", "aws_iam_group_policy"):
+            if resource.type in ("aws_iam_role", "aws_iam_policy", "aws_iam_role_policy", "aws_iam_user_policy", "aws_iam_group_policy", "aws_s3_bucket_policy"):
                 res = self.verify_iam_policy(resource)
                 if res:
                     results.append(res)
@@ -100,7 +104,7 @@ class VerificationEngine:
             witness_rules = []
             for rule_src in resource.rule_sources:
                 if isinstance(rule_src, SecurityGroupRule):
-                    if rule_src.direction.lower() == "ingress" and is_port_sensitive(
+                    if rule_src.direction.lower() in ("ingress", "egress") and is_port_sensitive(
                         rule_src.from_port, rule_src.to_port
                     ):
                         if any(not is_cidr_private(c) for c in rule_src.cidr_blocks):

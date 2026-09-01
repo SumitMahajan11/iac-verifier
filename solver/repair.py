@@ -303,7 +303,7 @@ class AutoRepairEngine:
         for addr, idx, rule in candidates:
             is_in_core = False
             if pattern == "SG_OVER_EXPOSURE" and isinstance(rule, SecurityGroupRule):
-                if rule.direction.lower() == "ingress" and is_port_sensitive(
+                if rule.direction.lower() in ("ingress", "egress") and is_port_sensitive(
                     rule.from_port, rule.to_port
                 ):
                     if any(not is_cidr_private(c) for c in rule.cidr_blocks):

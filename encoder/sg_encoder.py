@@ -66,10 +66,28 @@ def encode_sg_resource_symbolic(
             )
 
         if isinstance(rule_src, SecurityGroupRule):
-            if rule_src.direction.lower() == "ingress" and is_port_sensitive(
+            if any(isinstance(f, Unresolved) for f in (rule_src.protocol, rule_src.from_port, rule_src.to_port)):
+                return Unresolved(
+                    reason="Security group rule contains unresolved fields (protocol or ports)",
+                    expression=None,
+                )
+
+            if rule_src.direction.lower() in ("ingress", "egress") and is_port_sensitive(
                 rule_src.from_port, rule_src.to_port
             ):
                 for cidr in rule_src.cidr_blocks:
+                    if isinstance(cidr, Unresolved):
+                        return Unresolved(
+                            reason="Security group rule contains unresolved CIDR block",
+                            expression=cidr.expression,
+                        )
+                    # Also skip ResourceReferences for CIDRs, or fail-closed?
+                    # For safety, fail closed if we can't parse it as string.
+                    if not isinstance(cidr, str):
+                        return Unresolved(
+                            reason=f"Security group rule contains non-string CIDR: {type(cidr)}",
+                            expression=None,
+                        )
                     rule_ip_matches.append(make_ip_in_cidr_expr(src_ip, cidr))
 
     if not rule_ip_matches:

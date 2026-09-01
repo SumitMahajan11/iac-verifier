@@ -53,37 +53,21 @@ def run_verify(target_path: str, json_output: bool = False) -> int:
             graph = resolve_resource_references(graph)
             graph = resolve_rule_attachments(graph)
 
-            # Security group checks
-            for addr, res in graph.resources.items():
-                if res.type in ("aws_security_group", "aws_security_group_rule"):
-                    res_eval = engine.verify_security_group(res)
-                    if res_eval:
-                        overall_results.append(asdict(res_eval))
-                        if res_eval.status == "SAT":
-                            has_sat = True
-                        elif res_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
-                            has_unresolvable = True
-
-                # IAM policy checks
-                elif res.type in ("aws_iam_policy", "aws_iam_role_policy"):
-                    res_eval = engine.verify_iam_policy(res)
-                    if res_eval:
-                        overall_results.append(asdict(res_eval))
-                        if res_eval.status == "SAT":
-                            has_sat = True
-                        elif res_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
-                            has_unresolvable = True
-
+            results = engine.verify_graph(graph)
+            
             # Graph-level privilege escalation check if IAM roles present
             iam_roles = [r for r in graph.resources.values() if r.type == "aws_iam_role"]
             if len(iam_roles) >= 2:
                 esc_eval = engine.verify_privilege_escalation(graph)
                 if esc_eval:
-                    overall_results.append(asdict(esc_eval))
-                    if esc_eval.status == "SAT":
-                        has_sat = True
-                    elif esc_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
-                        has_unresolvable = True
+                    results.append(esc_eval)
+            
+            for res_eval in results:
+                overall_results.append(asdict(res_eval))
+                if res_eval.status == "SAT":
+                    has_sat = True
+                elif res_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
+                    has_unresolvable = True
 
         except Exception as e:
             overall_results.append({
