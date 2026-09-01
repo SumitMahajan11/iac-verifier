@@ -1,0 +1,21 @@
+name: IaC Verification Workflow
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  iac-verify:
+    name: Verify Terraform Security Invariants
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Run IaC Verifier Action
+        uses: ./
+        with:
+          path: './fixtures/phase2/sg_restricted_ssh.tf'
+          json: 'false'

@@ -1,0 +1,184 @@
+"""
+Phase 7 Command-Line Interface (cli/main.py).
+
+Provides automated verification and deletion-based auto-repair for Terraform HCL configurations.
+Exit Codes:
+  0 - Success: Safe / UNSAT Invariant Verified / REMEDIATED_MINIMAL
+  1 - Finding / Failure: SAT Vulnerability Detected / Auto-Repair Failed
+  2 - Engine Exception / Unresolvable Dependency
+"""
+
+import argparse
+from dataclasses import asdict
+import json
+import os
+import sys
+from typing import Dict, Any, List
+
+from parser.hcl_parser import parse_file, build_graph
+from parser.references import resolve_resource_references
+from parser.attachments import resolve_rule_attachments
+from solver.engine import VerificationEngine
+from solver.repair import AutoRepairEngine
+
+
+def run_verify(target_path: str, json_output: bool = False) -> int:
+    """Runs verification on target Terraform HCL file or directory."""
+    if not os.path.exists(target_path):
+        print(f"Error: Target path '{target_path}' does not exist.", file=sys.stderr)
+        return 2
+
+    files_to_process = []
+    if os.path.isfile(target_path):
+        files_to_process.append(target_path)
+    else:
+        for root, _, files in os.walk(target_path):
+            for file in files:
+                if file.endswith(".tf"):
+                    files_to_process.append(os.path.join(root, file))
+
+    if not files_to_process:
+        print(f"Error: No .tf files found at '{target_path}'.", file=sys.stderr)
+        return 2
+
+    engine = VerificationEngine()
+    overall_results: List[Dict[str, Any]] = []
+    has_sat = False
+    has_unresolvable = False
+
+    for file_path in files_to_process:
+        try:
+            parsed = parse_file(file_path)
+            graph = build_graph(parsed)
+            graph = resolve_resource_references(graph)
+            graph = resolve_rule_attachments(graph)
+
+            # Security group checks
+            for addr, res in graph.resources.items():
+                if res.type in ("aws_security_group", "aws_security_group_rule"):
+                    res_eval = engine.verify_security_group(res)
+                    if res_eval:
+                        overall_results.append(asdict(res_eval))
+                        if res_eval.status == "SAT":
+                            has_sat = True
+                        elif res_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
+                            has_unresolvable = True
+
+                # IAM policy checks
+                elif res.type in ("aws_iam_policy", "aws_iam_role_policy"):
+                    res_eval = engine.verify_iam_policy(res)
+                    if res_eval:
+                        overall_results.append(asdict(res_eval))
+                        if res_eval.status == "SAT":
+                            has_sat = True
+                        elif res_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
+                            has_unresolvable = True
+
+            # Graph-level privilege escalation check if IAM roles present
+            iam_roles = [r for r in graph.resources.values() if r.type == "aws_iam_role"]
+            if len(iam_roles) >= 2:
+                esc_eval = engine.verify_privilege_escalation(graph)
+                if esc_eval:
+                    overall_results.append(asdict(esc_eval))
+                    if esc_eval.status == "SAT":
+                        has_sat = True
+                    elif esc_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
+                        has_unresolvable = True
+
+        except Exception as e:
+            overall_results.append({
+                "status": "UNRESOLVABLE",
+                "file": file_path,
+                "message": f"Parsing/building error: {str(e)}"
+            })
+            has_unresolvable = True
+
+    if json_output:
+        print(json.dumps({
+            "target": target_path,
+            "total_verifications": len(overall_results),
+            "results": overall_results
+        }, indent=2))
+    else:
+        print(f"=== Verification Report: {target_path} ===")
+        for res in overall_results:
+            status = res.get("status")
+            addr = res.get("resource_address", res.get("file", "graph"))
+            msg = res.get("message", "")
+            print(f"[{status}] {addr}: {msg}")
+
+    if has_unresolvable:
+        return 2
+    elif has_sat:
+        return 1
+    return 0
+
+
+def run_repair(target_path: str, resource_address: str, pattern: str, json_output: bool = False) -> int:
+    """Runs auto-repair on specified resource address and vulnerability pattern."""
+    if not os.path.exists(target_path):
+        print(f"Error: Target path '{target_path}' does not exist.", file=sys.stderr)
+        return 2
+
+    try:
+        parsed = parse_file(target_path if os.path.isfile(target_path) else os.path.join(target_path, "main.tf"))
+        graph = build_graph(parsed)
+        graph = resolve_resource_references(graph)
+        graph = resolve_rule_attachments(graph)
+
+        repair_engine = AutoRepairEngine()
+        result = repair_engine.repair_resource(graph, resource_address, pattern)
+
+        if json_output:
+            print(json.dumps(asdict(result), indent=2))
+        else:
+            print(f"=== Auto-Repair Report ===")
+            print(f"Resource: {result.resource_address}")
+            print(f"Pattern:  {result.pattern}")
+            print(f"Status:   {result.status}")
+            print(f"Message:  {result.message}")
+            if result.deleted_rules:
+                print(f"Deleted Rules ({len(result.deleted_rules)}):")
+                for d in result.deleted_rules:
+                    print(f"  - [{d.get('resource_address')}] Index {d.get('statement_index')}: {d.get('rule_type')}")
+
+        if result.status in ("REMEDIATED_MINIMAL", "NO_VULNERABILITY"):
+            return 0
+        return 1
+
+    except Exception as e:
+        if json_output:
+            print(json.dumps({"status": "FAILED", "error": str(e)}, indent=2))
+        else:
+            print(f"Error during repair execution: {str(e)}", file=sys.stderr)
+        return 2
+
+
+def main():
+    parser = argparse.ArgumentParser(description="IaC Symbolic SMT Verifier & Auto-Repair Engine")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # verify subcommand
+    verify_parser = subparsers.add_parser("verify", help="Verify Terraform HCL file or directory")
+    verify_parser.add_argument("path", help="Path to .tf file or directory containing .tf files")
+    verify_parser.add_argument("--json", action="store_true", help="Output verification report in JSON")
+
+    # repair subcommand
+    repair_parser = subparsers.add_parser("repair", help="Run auto-repair on a target vulnerable resource")
+    repair_parser.add_argument("path", help="Path to .tf file or directory")
+    repair_parser.add_argument("--resource", required=True, help="Target resource address (e.g. aws_security_group.sg_open_ssh)")
+    repair_parser.add_argument("--pattern", required=True, choices=["SG_OVER_EXPOSURE", "IAM_WILDCARD_ALLOW", "PRIVILEGE_ESCALATION_PATH"], help="Vulnerability pattern")
+    repair_parser.add_argument("--json", action="store_true", help="Output repair report in JSON")
+
+    args = parser.parse_args()
+
+    if args.command == "verify":
+        code = run_verify(args.path, json_output=args.json)
+        sys.exit(code)
+    elif args.command == "repair":
+        code = run_repair(args.path, resource_address=args.resource, pattern=args.pattern, json_output=args.json)
+        sys.exit(code)
+
+
+if __name__ == "__main__":
+    main()

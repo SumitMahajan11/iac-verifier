@@ -1,0 +1,146 @@
+{
+  "summary": {
+    "passed": 149,
+    "failed": 141,
+    "skipped": 0,
+    "parsing_errors": 0,
+    "resource_count": 55,
+    "checkov_version": "3.3.16"
+  },
+  "failed_checks_count": 141,
+  "passed_checks_count": 149,
+  "failed_sample": [
+    {
+      "check_id": "CKV_AWS_23",
+      "check_name": "Ensure every security group and rule has a description",
+      "file_path": "\\phase2\\sg_open_ssh.tf",
+      "resource": "aws_security_group.open_ssh",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_24",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 22",
+      "file_path": "\\phase2\\sg_open_ssh.tf",
+      "resource": "aws_security_group.open_ssh",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_23",
+      "check_name": "Ensure every security group and rule has a description",
+      "file_path": "\\phase2\\sg_restricted_ssh.tf",
+      "resource": "aws_security_group.restricted_ssh",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_62",
+      "check_name": "Ensure IAM policies that allow full \"*-*\" administrative privileges are not created",
+      "file_path": "\\phase2\\iam_wildcard_allow.tf",
+      "resource": "aws_iam_policy.wildcard_allow",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_287",
+      "check_name": "Ensure IAM policies does not allow credentials exposure",
+      "file_path": "\\phase2\\iam_wildcard_allow.tf",
+      "resource": "aws_iam_policy.wildcard_allow",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_288",
+      "check_name": "Ensure IAM policies does not allow data exfiltration",
+      "file_path": "\\phase2\\iam_wildcard_allow.tf",
+      "resource": "aws_iam_policy.wildcard_allow",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_289",
+      "check_name": "Ensure IAM policies does not allow permissions management / resource exposure without constraints",
+      "file_path": "\\phase2\\iam_wildcard_allow.tf",
+      "resource": "aws_iam_policy.wildcard_allow",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_286",
+      "check_name": "Ensure IAM policies does not allow privilege escalation",
+      "file_path": "\\phase2\\iam_wildcard_allow.tf",
+      "resource": "aws_iam_policy.wildcard_allow",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_63",
+      "check_name": "Ensure no IAM policies documents allow \"*\" as a statement's actions",
+      "file_path": "\\phase2\\iam_wildcard_allow.tf",
+      "resource": "aws_iam_policy.wildcard_allow",
+      "guideline": null
+    },
+    {
+      "check_id": "CKV_AWS_355",
+      "check_name": "Ensure no IAM policies documents allow \"*\" as a statement's resource for restrictable actions",
+      "file_path": "\\phase2\\iam_wildcard_allow.tf",
+      "resource": "aws_iam_policy.wildcard_allow",
+      "guideline": null
+    }
+  ],
+  "passed_sample": [
+    {
+      "check_id": "CKV_AWS_382",
+      "check_name": "Ensure no security groups allow egress from 0.0.0.0:0 to port -1",
+      "file_path": "\\phase2\\sg_open_ssh.tf",
+      "resource": "aws_security_group.open_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_25",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 3389",
+      "file_path": "\\phase2\\sg_open_ssh.tf",
+      "resource": "aws_security_group.open_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_260",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 80",
+      "file_path": "\\phase2\\sg_open_ssh.tf",
+      "resource": "aws_security_group.open_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_277",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port -1",
+      "file_path": "\\phase2\\sg_open_ssh.tf",
+      "resource": "aws_security_group.open_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_382",
+      "check_name": "Ensure no security groups allow egress from 0.0.0.0:0 to port -1",
+      "file_path": "\\phase2\\sg_restricted_ssh.tf",
+      "resource": "aws_security_group.restricted_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_24",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 22",
+      "file_path": "\\phase2\\sg_restricted_ssh.tf",
+      "resource": "aws_security_group.restricted_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_25",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 3389",
+      "file_path": "\\phase2\\sg_restricted_ssh.tf",
+      "resource": "aws_security_group.restricted_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_260",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 80",
+      "file_path": "\\phase2\\sg_restricted_ssh.tf",
+      "resource": "aws_security_group.restricted_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_277",
+      "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port -1",
+      "file_path": "\\phase2\\sg_restricted_ssh.tf",
+      "resource": "aws_security_group.restricted_ssh"
+    },
+    {
+      "check_id": "CKV_AWS_287",
+      "check_name": "Ensure IAM policies does not allow credentials exposure",
+      "file_path": "\\phase2\\iam_wildcard_with_deny.tf",
+      "resource": "aws_iam_policy.wildcard_with_deny"
+    }
+  ]
+}

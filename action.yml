@@ -1,0 +1,50 @@
+name: 'IaC Symbolic SMT Verifier'
+description: 'Static IaC verifier using Z3 SMT solver for security group over-exposure, IAM wildcard permissions, and privilege escalation reachability'
+inputs:
+  path:
+    description: 'Path to .tf file or directory containing Terraform files'
+    required: false
+    default: '.'
+  json:
+    description: 'Output verification report in JSON format (true/false)'
+    required: false
+    default: 'false'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+outputs:
+  exit-code:
+    description: 'Verification exit code (0: Safe/UNSAT, 1: Finding/SAT, 2: Error/UNRESOLVABLE)'
+    value: ${{ steps.run-verifier.outputs.exit_code }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install z3-solver python-hcl2 pytest
+
+    - name: Run IaC Verifier
+      id: run-verifier
+      shell: bash
+      run: |
+        JSON_FLAG=""
+        if [ "${{ inputs.json }}" = "true" ]; then
+          JSON_FLAG="--json"
+        fi
+        
+        set +e
+        python cli/main.py verify "${{ inputs.path }}" $JSON_FLAG
+        EXIT_CODE=$?
+        set -e
+        
+        echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+        exit $EXIT_CODE

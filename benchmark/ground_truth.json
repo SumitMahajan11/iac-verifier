@@ -1,0 +1,270 @@
+[
+    {
+        "corpus": "terragoat",
+        "file": "fixtures/phase2/sg_open_ssh.tf",
+        "resource_id": "aws_security_group.open_ssh",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "port": 22,
+            "cidr": "0.0.0.0/0"
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "terragoat",
+        "file": "fixtures/phase2/sg_restricted_ssh.tf",
+        "resource_id": "aws_security_group.restricted_ssh",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "UNSAT",
+        "expected_witness": null,
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/phase2/iam_wildcard_allow.tf",
+        "resource_id": "aws_iam_role_policy.admin_policy",
+        "vulnerability_class": "IAM_WILDCARD_GRANT",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "action": "*",
+            "resource": "*"
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/phase2/iam_wildcard_with_deny.tf",
+        "resource_id": "aws_iam_role_policy.deny_policy",
+        "vulnerability_class": "IAM_WILDCARD_GRANT",
+        "expected_engine_state": "UNSAT",
+        "expected_witness": null,
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/phase3/direct_escalation.tf",
+        "resource_id": "aws_iam_role.admin_role",
+        "vulnerability_class": "PRIVILEGE_ESCALATION_PATH",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "path": [
+                "arn:aws:iam::111122223333:root",
+                "aws_iam_role.admin_role"
+            ]
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/phase3/no_path_safe.tf",
+        "resource_id": "aws_iam_role.isolated_role_b",
+        "vulnerability_class": "PRIVILEGE_ESCALATION_PATH",
+        "expected_engine_state": "UNSAT",
+        "expected_witness": null,
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "terragoat",
+        "file": "fixtures/phase3/unresolved_trust.tf",
+        "resource_id": "aws_iam_role.unresolved_role",
+        "vulnerability_class": "PRIVILEGE_ESCALATION_PATH",
+        "expected_engine_state": "UNRESOLVABLE",
+        "expected_witness": null,
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "terragoat",
+        "file": "fixtures/corpora/terragoat/terraform/aws/ec2.tf",
+        "resource_id": "aws_security_group.web-node",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "port": 22,
+            "cidr": "0.0.0.0/0"
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
+        "resource_id": "aws_iam_policy.policy",
+        "vulnerability_class": "IAM_WILDCARD_GRANT",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "action": "*",
+            "resource": "*"
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
+        "resource_id": "aws_iam_policy.admin_not_indicated_policy",
+        "vulnerability_class": "IAM_WILDCARD_GRANT",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "action": "*",
+            "resource": "*"
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.all_ports_to_all",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "port": 0,
+            "cidr": "0.0.0.0/0"
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.known_port_to_all",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT",
+        "expected_witness": {
+            "port": 22,
+            "cidr": "0.0.0.0/0"
+        },
+        "ambiguity": {
+            "is_ambiguous": false,
+            "reason": null
+        }
+    },
+    {
+        "corpus": "terragoat",
+        "file": "fixtures/unsupported_dynamic_module.tf",
+        "resource_id": "aws_iam_role.dynamic_role",
+        "vulnerability_class": "IAM_WILDCARD_GRANT",
+        "expected_engine_state": "UNRESOLVABLE",
+        "expected_witness": null,
+        "ambiguity": {
+            "is_ambiguous": true,
+            "reason": "Uses third-party remote module with unresolvable dynamic state."
+        }
+    },
+    {
+        "file": "fixtures/corpora/terragoat/terraform/aws/db-app.tf",
+        "resource_id": "aws_iam_role_policy.ec2policy",
+        "expected_engine_state": "SAT",
+        "vulnerability_class": "IAM_WILDCARD_GRANT"
+    },
+    {
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.opens_plaintext_port",
+        "expected_engine_state": "SAT",
+        "vulnerability_class": "SG_EXPOSURE"
+    },
+    {
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.opens_port_range",
+        "expected_engine_state": "SAT",
+        "vulnerability_class": "SG_EXPOSURE"
+    },
+    {
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.opens_port_to_all",
+        "expected_engine_state": "SAT",
+        "vulnerability_class": "SG_EXPOSURE"
+    },
+    {
+        "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
+        "resource_id": "aws_iam_role_policy.inline_role_policy",
+        "expected_engine_state": "UNRESOLVABLE",
+        "vulnerability_class": "IAM_WILDCARD_GRANT"
+    },
+    {
+        "corpus": "terragoat",
+        "file": "fixtures/corpora/terragoat/terraform/aws/db-app.tf",
+        "resource_id": "aws_security_group.default",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "UNSAT"
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.unneeded_security_group",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "UNSAT"
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.unused_security_group",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT"
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.unexpected_security_group",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT"
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.whitelists_aws",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT"
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
+        "resource_id": "aws_iam_user_policy.inline_user_policy",
+        "vulnerability_class": "IAM_WILDCARD_GRANT",
+        "expected_engine_state": "UNSAT"
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
+        "resource_id": "aws_iam_group_policy.inline_group_policy",
+        "vulnerability_class": "IAM_WILDCARD_GRANT",
+        "expected_engine_state": "UNSAT"
+    },
+    {
+        "corpus": "sadcloud",
+        "file": "fixtures/corpora/sadcloud/modules/aws/ec2/main.tf",
+        "resource_id": "aws_security_group.overlapping_security_group",
+        "vulnerability_class": "SG_EXPOSURE",
+        "expected_engine_state": "SAT"
+    }
+]
