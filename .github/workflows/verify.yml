@@ -64,9 +64,16 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Cert Dependencies & Generate Certs
+        run: |
+          python -m pip install --upgrade pip
+          pip install cryptography
+          python k8s/generate_certs.py
+
       - name: Build Webhook Container Image
         run: |
           docker build -t iac-webhook:latest -f Dockerfile.webhook .
+
 
       - name: Install Syft
         run: |
