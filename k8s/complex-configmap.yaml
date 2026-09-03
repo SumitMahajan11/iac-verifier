@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: complex-infrastructure
   namespace: default
+  labels:
+    iac-verifier/scan: "true"
 data:
   network.tf: |
     resource "aws_security_group" "web_sg" {

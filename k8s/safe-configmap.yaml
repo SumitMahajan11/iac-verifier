@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: safe-infrastructure
   namespace: default
+  labels:
+    iac-verifier/scan: "true"
 data:
   main.tf: |
     resource "aws_security_group" "safe_sg" {

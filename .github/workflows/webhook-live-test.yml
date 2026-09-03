@@ -100,6 +100,13 @@ jobs:
           kubectl get configmap safe-infrastructure -o yaml
           echo "SUCCESS: Admission webhook admitted safe ConfigMap."
 
+      - name: Test Unlabeled Bypass Case (Unlabeled Manifest)
+        run: |
+          echo "=== Testing Unlabeled Bypass Case (Unlabeled Unsafe ConfigMap) ==="
+          kubectl apply -f k8s/unlabeled-configmap.yaml
+          kubectl get configmap unlabeled-infrastructure -o yaml
+          echo "SUCCESS: Unlabeled ConfigMap safely bypassed webhook evaluation via objectSelector."
+
       - name: Tear Down KinD Cluster
         if: always()
         run: |

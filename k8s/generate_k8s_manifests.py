@@ -20,6 +20,14 @@ webhooks:
         operations: ["CREATE", "UPDATE"]
         resources: ["configmaps"]
         scope: "Namespaced"
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: ["kube-system", "kube-public", "kube-node-lease"]
+    objectSelector:
+      matchLabels:
+        iac-verifier/scan: "true"
     clientConfig:
       service:
         name: iac-webhook-service
@@ -41,6 +49,8 @@ kind: ConfigMap
 metadata:
   name: unsafe-infrastructure
   namespace: default
+  labels:
+    iac-verifier/scan: "true"
 data:
   main.tf: |
     resource "aws_security_group" "unsafe_sg" {
@@ -62,6 +72,8 @@ kind: ConfigMap
 metadata:
   name: safe-infrastructure
   namespace: default
+  labels:
+    iac-verifier/scan: "true"
 data:
   main.tf: |
     resource "aws_security_group" "safe_sg" {
@@ -77,5 +89,26 @@ data:
 
 with open("k8s/safe-configmap.yaml", "w") as f:
     f.write(safe_cm_yaml)
+
+unlabeled_cm_yaml = """apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unlabeled-infrastructure
+  namespace: default
+data:
+  main.tf: |
+    resource "aws_security_group" "unlabeled_unsafe_sg" {
+      name = "unlabeled-unsafe-sg"
+      ingress {
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+      }
+    }
+"""
+
+with open("k8s/unlabeled-configmap.yaml", "w") as f:
+    f.write(unlabeled_cm_yaml)
 
 print("Generated Kubernetes manifests in k8s/")
