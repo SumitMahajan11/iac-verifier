@@ -26,7 +26,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install z3-solver python-hcl2 pyyaml structlog prometheus-client fastapi uvicorn cryptography pytest pytest-cov
+          pip install z3-solver python-hcl2 pyyaml structlog prometheus-client fastapi uvicorn cryptography httpx pytest pytest-cov
           pip install -e .
 
       - name: Run Full Pytest Suite
