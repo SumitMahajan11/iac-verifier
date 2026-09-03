@@ -30,7 +30,8 @@ runs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install z3-solver python-hcl2 pytest
+        pip install z3-solver python-hcl2 pyyaml click pytest
+        pip install -e .
 
     - name: Run IaC Verifier
       id: run-verifier
