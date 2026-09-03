@@ -13,16 +13,17 @@ from dataclasses import asdict
 import json
 import os
 import sys
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from parser.hcl_parser import parse_file, build_graph
 from parser.references import resolve_resource_references
 from parser.attachments import resolve_rule_attachments
+from solver.certificates import generate_certificate_from_result
 from solver.engine import VerificationEngine
 from solver.repair import AutoRepairEngine
 
 
-def run_verify(target_path: str, json_output: bool = False) -> int:
+def run_verify(target_path: str, json_output: bool = False, export_certificate_path: Optional[str] = None) -> int:
     """Runs verification on target Terraform HCL file or directory."""
     if not os.path.exists(target_path):
         print(f"Error: Target path '{target_path}' does not exist.", file=sys.stderr)
@@ -43,13 +44,14 @@ def run_verify(target_path: str, json_output: bool = False) -> int:
 
     engine = VerificationEngine()
     overall_results: List[Dict[str, Any]] = []
+    certificates: List[Dict[str, Any]] = []
     has_sat = False
     has_unresolvable = False
 
     for file_path in files_to_process:
         try:
             parsed = parse_file(file_path)
-            graph = build_graph(parsed)
+            graph = build_graph(parsed, file_path=file_path)
             graph = resolve_resource_references(graph)
             graph = resolve_rule_attachments(graph)
 
@@ -64,6 +66,7 @@ def run_verify(target_path: str, json_output: bool = False) -> int:
             
             for res_eval in results:
                 overall_results.append(asdict(res_eval))
+                certificates.append(generate_certificate_from_result(res_eval))
                 if res_eval.status == "SAT":
                     has_sat = True
                 elif res_eval.status in ("UNRESOLVABLE", "UNKNOWN"):
@@ -76,6 +79,11 @@ def run_verify(target_path: str, json_output: bool = False) -> int:
                 "message": f"Parsing/building error: {str(e)}"
             })
             has_unresolvable = True
+
+    if export_certificate_path:
+        os.makedirs(os.path.dirname(os.path.abspath(export_certificate_path)), exist_ok=True)
+        with open(export_certificate_path, "w", encoding="utf-8") as f:
+            json.dump(certificates if len(certificates) > 1 else (certificates[0] if certificates else {}), f, indent=2)
 
     if json_output:
         print(json.dumps({
@@ -90,6 +98,8 @@ def run_verify(target_path: str, json_output: bool = False) -> int:
             addr = res.get("resource_address", res.get("file", "graph"))
             msg = res.get("message", "")
             print(f"[{status}] {addr}: {msg}")
+        if export_certificate_path:
+            print(f"Exported {len(certificates)} proof certificate(s) to '{export_certificate_path}'")
 
     if has_unresolvable:
         return 2
@@ -105,8 +115,9 @@ def run_repair(target_path: str, resource_address: str, pattern: str, json_outpu
         return 2
 
     try:
-        parsed = parse_file(target_path if os.path.isfile(target_path) else os.path.join(target_path, "main.tf"))
-        graph = build_graph(parsed)
+        target_file = target_path if os.path.isfile(target_path) else os.path.join(target_path, "main.tf")
+        parsed = parse_file(target_file)
+        graph = build_graph(parsed, file_path=target_file)
         graph = resolve_resource_references(graph)
         graph = resolve_rule_attachments(graph)
 
@@ -125,6 +136,9 @@ def run_repair(target_path: str, resource_address: str, pattern: str, json_outpu
                 print(f"Deleted Rules ({len(result.deleted_rules)}):")
                 for d in result.deleted_rules:
                     print(f"  - [{d.get('resource_address')}] Index {d.get('statement_index')}: {d.get('rule_type')}")
+            if result.patch:
+                print("\n=== Unified Diff Patch (Human-in-the-Loop Review) ===")
+                print(result.patch)
 
         if result.status in ("REMEDIATED_MINIMAL", "NO_VULNERABILITY"):
             return 0
@@ -146,6 +160,7 @@ def main():
     verify_parser = subparsers.add_parser("verify", help="Verify Terraform HCL file or directory")
     verify_parser.add_argument("path", help="Path to .tf file or directory containing .tf files")
     verify_parser.add_argument("--json", action="store_true", help="Output verification report in JSON")
+    verify_parser.add_argument("--export-certificate", help="Export formal SMT proof certificate(s) as JSON file")
 
     # repair subcommand
     repair_parser = subparsers.add_parser("repair", help="Run auto-repair on a target vulnerable resource")
@@ -157,11 +172,12 @@ def main():
     args = parser.parse_args()
 
     if args.command == "verify":
-        code = run_verify(args.path, json_output=args.json)
+        code = run_verify(args.path, json_output=args.json, export_certificate_path=args.export_certificate)
         sys.exit(code)
     elif args.command == "repair":
         code = run_repair(args.path, resource_address=args.resource, pattern=args.pattern, json_output=args.json)
         sys.exit(code)
+
 
 
 if __name__ == "__main__":

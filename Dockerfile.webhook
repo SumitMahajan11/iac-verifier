@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir fastapi uvicorn z3-solver python-hcl2 pyyaml cryptography
+
+# Copy application files
+COPY cli/ /app/cli/
+COPY parser/ /app/parser/
+COPY solver/ /app/solver/
+COPY encoder/ /app/encoder/
+COPY graph/ /app/graph/
+COPY certs/ /app/certs/
+
+EXPOSE 8443
+
+CMD ["uvicorn", "cli.webhook:app", "--host", "0.0.0.0", "--port", "8443", "--ssl-keyfile", "/app/certs/server.key", "--ssl-certfile", "/app/certs/server.crt"]

@@ -1,9 +1,0 @@
-{
-  "status": "UNSAT",
-  "resource_address": "graph",
-  "pattern": "PRIVILEGE_ESCALATION_REACHABILITY",
-  "message": "Privilege escalation complete proof of unreachability (no target roles or external entry points found)",
-  "witness": null,
-  "unsat_core": null,
-  "z3_proof_sexpr": null
-}

@@ -77,3 +77,83 @@ def test_incremental_cross_file(tmp_path):
     
     sg_res = next(r for r in incremental_results if r.resource_address == "aws_security_group.sg1")
     assert sg_res.status == "SAT"  # Now unsafe
+
+
+def test_incremental_multi_resource_skips_untouched(tmp_path, monkeypatch):
+    file_0 = tmp_path / "file_0.tf"
+    file_1 = tmp_path / "file_1.tf"
+    file_2 = tmp_path / "file_2.tf"
+
+    file_0.write_text("""
+    resource "aws_security_group" "sg_0" {
+      name = "sg_0"
+    }
+    """)
+
+    file_1.write_text("""
+    resource "aws_security_group" "sg_1" {
+      name = "sg_1"
+    }
+    """)
+
+    file_2.write_text("""
+    resource "aws_security_group" "sg_2" {
+      name = "sg_2"
+    }
+    """)
+
+    from parser.modules import parse_directory
+    from parser.attachments import resolve_rule_attachments
+    from parser.references import resolve_resource_references
+    from parser.expansion import build_graph_with_expansion
+
+    def build_full_graph(dir_path):
+        parsed = parse_directory(dir_path)
+        graph = build_graph_with_expansion(parsed, dir_path)
+        resolve_resource_references(graph)
+        resolve_rule_attachments(graph)
+        return graph
+
+    graph1 = build_full_graph(tmp_path)
+    cache_dir = tmp_path / ".iac_cache"
+    os.makedirs(cache_dir, exist_ok=True)
+
+    engine1 = VerificationEngine(use_cache=True)
+    engine1.cache.cache_dir = str(cache_dir)
+    results1 = engine1.verify_graph(graph1)
+    assert len(results1) == 3
+
+    # Touch only file_0.tf
+    file_0.write_text("""
+    resource "aws_security_group" "sg_0" {
+      name = "sg_0_modified"
+    }
+    """)
+
+    graph2 = build_full_graph(tmp_path)
+    engine2 = VerificationEngine(use_cache=True)
+    engine2.cache.cache_dir = str(cache_dir)
+
+    # Spy on verify_security_group to count solver calls
+    call_count = 0
+    orig_verify_sg = engine2.verify_security_group
+
+    def spied_verify_sg(resource):
+        nonlocal call_count
+        call_count += 1
+        return orig_verify_sg(resource)
+
+    monkeypatch.setattr(engine2, "verify_security_group", spied_verify_sg)
+
+    incremental_results = engine2.verify_incremental(graph2, [str(file_0)])
+
+    # Assert only sg_0 and graph reachability are returned
+    returned_addresses = {res.resource_address for res in incremental_results}
+    assert "aws_security_group.sg_0" in returned_addresses
+    assert "graph" in returned_addresses
+    assert "aws_security_group.sg_1" not in returned_addresses
+    assert "aws_security_group.sg_2" not in returned_addresses
+
+    # Assert verify_security_group solver computation was invoked EXACTLY ONCE (only for sg_0)
+    assert call_count == 1
+

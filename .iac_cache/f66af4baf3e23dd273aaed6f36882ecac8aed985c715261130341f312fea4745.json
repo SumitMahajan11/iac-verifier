@@ -1,9 +1,0 @@
-{
-  "status": "UNSAT",
-  "resource_address": "aws_s3_bucket_policy.scoped_unsat",
-  "pattern": "IAM_WILDCARD_ALLOW",
-  "message": "IAM resource 'aws_s3_bucket_policy.scoped_unsat' is safe from wildcard permissions",
-  "witness": null,
-  "unsat_core": null,
-  "z3_proof_sexpr": "(asserted false)"
-}

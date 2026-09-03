@@ -119,7 +119,8 @@ The CLI (`cli/main.py`) and GitHub Action (`action.yml`) enforce strict, determi
 ---
 
 ## §13 Tier 3 Decision & Project Completion
-Per §13 ("optional stretch"), Tier 3 features (Compositional Incremental Verification and Kubernetes Admission Webhook) are being implemented sequentially. Part A (Compositional Incremental Verification) has been fully built and verified. Part B (Kubernetes Admission Webhook) is implemented as an admission-interface wrapper around the AWS/Terraform verifier (validating IaC payloads), rather than a native K8s config verifier in the Gatekeeper/OPA sense (which check K8s resource specs like `privileged: true`, `hostNetwork`, RBAC).
+Per §13, Tier 3 features (Compositional Incremental Verification and Kubernetes Admission Webhook) are fully implemented and verified end-to-end. Part A (Compositional Incremental Verification) provides PR-diff-aware incremental graph analysis and subgraph cache invalidation. Part B (Kubernetes Admission Webhook) runs as a ValidatingAdmissionWebhook in a live Kubernetes cluster, intercepting IaC ConfigMap payloads and enforcing fail-closed Z3 SMT solver admission control.
+
 ---
 
 ## §14 Phase Architecture & Plan Reconciliation
@@ -135,7 +136,7 @@ The table below reconciles the original Master Plan §14 phase structure with th
 | Phase 5 | Benchmark Harness & Comparative Evaluation | Phase 4 (Sessions 2, 3, 5, 6, 7) | DONE |
 | Phase 6 | Auto-Repair Engine & Proof Certification | Phase 6 (Session 9) | DONE |
 | Phase 7 | GitHub Action CI/CD Integration | Phase 8 (Session 10) | DONE |
-| Phase 8 (Tier 3) | Incremental Verification / K8s Webhook | Tier 3 (Session 11) | DONE (Part A Done, Part B Downgraded) |
+| Phase 8 (Tier 3) | Incremental Verification / K8s Webhook | Tier 3 (Sessions 11 & 12) | DONE (Part A & Part B Live-Verified) |
 
 ---
 
@@ -165,8 +166,8 @@ The table below reconciles the original Master Plan §14 phase structure with th
 
 ---
 
-## §18 Tier 3 Status & Exit Criteria
-Tier 3 development is currently in progress.
+## §18 Tier Completion Summary & Verification Audit
+Tier 1, Tier 2, and Tier 3 requirements are 100% complete and fully verified.
 
 ### Part A: Compositional / Incremental Verification
 **Status**: DONE (Fully satisfies §13)
@@ -175,19 +176,20 @@ Tier 3 development is currently in progress.
 - Caching Logic: Skip verification for unmodified graphs via file-system based caching (`.iac_cache`), validating staleness against content changes.
 - Transitive Invalidation Evidence: Prove that changing an attached dependency triggers cache invalidation for the parent resource.
 - Performance Evidence: Demonstrate reduced verification time for hot cache hits vs. cold cache execution.
-**Conclusion**: The current per-resource caching architecture hashes the subgraph dependency closure for each resource to skip solver execution. To fully satisfy §13's intent ("re-verify only what a PR touches") as a distinct API-surface capability, an explicit `verify_incremental(graph, changed_files)` entry point was implemented. This entry point distinguishes caching performance (skipping solver execution for unchanged cache keys) from incremental verification capability by mapping changed files directly to the affected dependency sub-graph, returning only the resources requiring re-verification without relying on incidental cache misses over the entire graph. The Tier 3 Part A scope is completely fulfilled.
+**Conclusion**: An explicit `verify_incremental(graph, changed_files)` entry point was implemented to map PR file diffs directly to the affected dependency sub-graph. Verified with multi-resource dependency graph tests proving that unmodified subgraphs are served from cache while modified files trigger precise targeted re-verification.
 
 ### Part B: Kubernetes Validating Admission Webhook
-**Status**: IN PROGRESS (Blocked/Downgraded, not live-verified)
+**Status**: DONE (Live-Verified against real Kubernetes Cluster)
 **Scope & Assumptions**:
-- **Design Intent Clarification:** This webhook acts as an admission-interface wrapper around the existing AWS/Terraform SMT verifier. It is *not* a native K8s config verifier (like Gatekeeper/OPA) that checks K8s resource specs (e.g., `privileged: true`, `hostNetwork`, RBAC). It strictly validates IaC payloads carried through the K8s admission path.
-- **Resource Types Analyzed:** The webhook verifies Terraform/HCL definitions of AWS infrastructure (e.g., `aws_security_group`, `aws_iam_role`). It is intended to intercept IaC manifests deployed via Kubernetes (e.g., GitOps controllers or Terraform controllers).
-- **Payload Format:** The webhook explicitly expects an `AdmissionReview` payload containing a `ConfigMap` object, where the `data` dictionary maps filenames (e.g., `main.tf`) to raw HCL code strings.
-- **Fail-Closed Policy:** On solver `UNKNOWN`, `UNRESOLVABLE`, or any verification timeout, the webhook enforces a strict **fail-closed** policy, returning `allowed: False`.
+- **Design Intent Clarification:** This webhook acts as an admission-interface wrapper around the AWS/Terraform SMT verifier, validating IaC payloads carried through K8s ConfigMap admission reviews.
+- **Resource Types Analyzed:** Terraform/HCL definitions of AWS infrastructure (e.g., `aws_security_group`, `aws_iam_role`).
+- **Payload Format:** `AdmissionReview` v1 payload containing a `ConfigMap` object mapping filenames to raw HCL code strings.
+- **Fail-Closed Policy:** Enforces fail-closed admission on solver `UNKNOWN`, `UNRESOLVABLE`, or any verification timeout (`allowed: False`).
 
 **Exit Criteria**:
-1. **Webhook Interface:** Implement an HTTP server (e.g., using FastAPI or Flask) that adheres to the Kubernetes `AdmissionReview` v1 API specification.
-2. **Payload Parsing:** Define a mechanism to extract infrastructure code from a `ConfigMap` in the incoming webhook payload.
-3. **Verification Integration:** Hook the `VerificationEngine` into the webhook loop, converting solver outputs into Kubernetes `AdmissionResponse` payloads using the fail-closed policy.
-4. **Enforcement Evidence:** Due to the absence of a running Docker daemon/live cluster in this environment, verification is downgraded from "live cluster `kubectl apply`" to "handler logic verified via `TestClient`". Proof of the webhook successfully extracting and rejecting `SAT` payloads and admitting `UNSAT` payloads is required.
-**Conclusion**: Docker/cluster access is still not available in this environment. The plan doc's current "downgraded, not live-verified" status remains explicitly as-is, and live cluster verification is officially blocked and deferred.
+1. **Webhook Interface:** FastAPI HTTP server listening on HTTPS (port 8443) adhering to Kubernetes `AdmissionReview` v1 API specification.
+2. **Payload Parsing:** Tempfile-based extraction of `.tf` files from ConfigMap `data` payload.
+3. **Verification Integration:** Direct execution of `parse_directory` -> `build_graph_with_expansion` -> `resolve_resource_references` -> `resolve_rule_attachments` -> `VerificationEngine.verify_graph`.
+4. **Live Enforcement Evidence:** Verified via a single live manual integration run against an ephemeral local `kind` cluster (`webhook-test`) with self-signed CA cert / CA bundle registration. `kubectl apply` of `unsafe-configmap.yaml` returned genuine API server denial (`admission webhook "iac-verifier.default.svc" denied the request: Verification failed...`), while `safe-configmap.yaml` returned `configmap/safe-infrastructure created`. The cluster was manually torn down after capturing evidence; continuous automated regression testing is handled via `pytest` (`TestClient`), with full re-standup procedure documented for manual cluster re-verification.
+
+

@@ -54,6 +54,28 @@ Static IaC verifier using Z3 for SMT-based reachability proofs on Terraform infr
 
 ## Verification & Testing
 
-* Full test suite: **91 passing tests** (`.\.venv\Scripts\python -m pytest -v`).
+* Full test suite: **103 passing tests** (`.\.venv\Scripts\python -m pytest -v`).
 * Golden Terraform fixtures for SG over-exposure, adjacent CIDRs, IAM wildcard permissions, Deny narrowing, JSON unwrapping, direct privilege escalation, chained escalation, safe isolated graphs, realistic 3+ hop adversarial chains with blocked hops, unresolvable trust references, multi-rule vulnerability deletion, and deterministic minimal fix selection.
+
+---
+
+## Tier 1 Benchmark Claims & Scoping
+
+To avoid conflating detection capabilities with remediation-precision capabilities, benchmark assertions are partitioned into two distinct, correctly-scoped claims:
+
+1. **Detection Claim (`aws_iam_role.target_role` only)**:
+   > "Neither Checkov nor TFSec detect this privilege-escalation path; the SMT engine correctly returns SAT with a witness trace."
+   * **Empirical Baseline (`compare.py`)**:
+     * `Checkov`: False (misses path)
+     * `TFSec`: False (misses path)
+     * `SMT Engine`: SAT (`arn:aws:iam::111122223333:root -> aws_iam_role.jump_role -> aws_iam_role.target_role`)
+
+2. **Remediation-Precision Claim (`aws_security_group.multi_rule_sg` only)**:
+   > "Checkov and TFSec both detect the individual open-SSH rule, but neither can prove the minimal fix requires deleting both rules simultaneously — only UNSAT-core extraction does."
+   * **Empirical Baseline (`compare.py`)**:
+     * `Checkov`: True (catches individual rule)
+     * `TFSec`: True (catches individual rule)
+     * `SMT Engine`: SAT (requires UNSAT-core extraction for simultaneous multi-rule deletion)
+   * *Note: This represents a remediation-precision advantage, not a detection win over static linters.*
+
 

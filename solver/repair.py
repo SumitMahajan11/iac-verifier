@@ -27,7 +27,139 @@ class RemediationResult:
     reverified_status: str
     initial_certificate: Optional[Dict[str, Any]] = None
     reverified_certificate: Optional[Dict[str, Any]] = None
+    patch: Optional[str] = None
     message: str = ""
+
+
+def generate_unified_diff(
+    file_path: Optional[str],
+    deleted_rules: List[Dict[str, Any]],
+    resource_address: str,
+) -> str:
+    """
+    Generates a unified diff patch (git-style) showing the deletion of identified vulnerable rules/statements.
+    If file_path exists and is readable, it operates on original HCL text.
+    Otherwise, it produces a clear unified diff against a canonical block representation.
+    """
+    import difflib
+    import os
+
+    rel_path = os.path.basename(file_path) if file_path else f"{resource_address}.tf"
+    from_file = f"a/{rel_path}"
+    to_file = f"b/{rel_path}"
+
+    if file_path and os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                original_lines = f.readlines()
+
+            target_indices = {
+                r.get("statement_index")
+                for r in deleted_rules
+                if r.get("resource_address") == resource_address or not r.get("resource_address")
+            }
+
+            res_parts = resource_address.split(".")
+            res_type = res_parts[0] if len(res_parts) > 0 else ""
+            res_name = res_parts[1] if len(res_parts) > 1 else ""
+            resource_pattern = f'resource "{res_type}" "{res_name}"'
+            resource_pattern_alt = f"resource '{res_type}' '{res_name}'"
+
+            modified_lines = []
+            in_target_resource = False
+            in_inner_block = False
+            block_lines = []
+            current_statement_index = -1
+            resource_depth = 0
+            inner_depth = 0
+
+            for line in original_lines:
+                stripped = line.strip()
+                open_braces = line.count("{")
+                close_braces = line.count("}")
+
+                if not in_target_resource:
+                    if resource_pattern in line or resource_pattern_alt in line:
+                        in_target_resource = True
+                        resource_depth = open_braces - close_braces
+                        current_statement_index = -1
+                    modified_lines.append(line)
+                else:
+                    if in_inner_block:
+                        block_lines.append(line)
+                        inner_depth += open_braces - close_braces
+                        if inner_depth <= 0:
+                            in_inner_block = False
+                            if current_statement_index not in target_indices:
+                                modified_lines.extend(block_lines)
+                            block_lines = []
+                    else:
+                        is_block_start = (
+                            stripped.startswith("ingress {")
+                            or stripped.startswith("ingress")
+                            and "{" in stripped
+                            or stripped.startswith("egress {")
+                            or stripped.startswith("egress")
+                            and "{" in stripped
+                            or stripped.startswith("statement {")
+                            or stripped.startswith("Statement {")
+                            or stripped.startswith("dynamic ")
+                        )
+                        if is_block_start:
+                            current_statement_index += 1
+                            in_inner_block = True
+                            inner_depth = open_braces - close_braces
+                            block_lines = [line]
+                            if inner_depth <= 0:
+                                in_inner_block = False
+                                if current_statement_index not in target_indices:
+                                    modified_lines.extend(block_lines)
+                                block_lines = []
+                        else:
+                            resource_depth += open_braces - close_braces
+                            if resource_depth <= 0 and stripped == "}":
+                                in_target_resource = False
+                            modified_lines.append(line)
+
+            diff = list(
+                difflib.unified_diff(
+                    original_lines,
+                    modified_lines,
+                    fromfile=from_file,
+                    tofile=to_file,
+                    lineterm="",
+                )
+            )
+            if diff:
+                return "\n".join(diff)
+        except Exception:
+            pass
+
+    res_parts = resource_address.split(".")
+    res_type = res_parts[0] if len(res_parts) > 0 else "aws_security_group"
+    res_name = res_parts[1] if len(res_parts) > 1 else "main"
+
+    orig = [f'resource "{res_type}" "{res_name}" {{\n']
+    mod = [f'resource "{res_type}" "{res_name}" {{\n']
+    for rule in deleted_rules:
+        idx = rule.get("statement_index", 0)
+        rtype = rule.get("rule_type", "Rule")
+        details = rule.get("rule_details", "")
+        orig.append(f"  # [{idx}] {rtype}: {details}\n")
+
+    orig.append("}\n")
+    mod.append("}\n")
+
+    diff = list(
+        difflib.unified_diff(
+            orig,
+            mod,
+            fromfile=from_file,
+            tofile=to_file,
+            lineterm="",
+        )
+    )
+    return "\n".join(diff)
 
 
 def copy_graph_without_rules(
@@ -43,16 +175,17 @@ def copy_graph_without_rules(
         new_rule_sources = []
         for idx, rule in enumerate(res.rule_sources):
             if (address, idx) not in remove_set:
-                new_rule_sources.append(copy.deepcopy(rule))
+                new_rule_sources.append(rule)
 
-        new_res = Resource(
+        res_copy = Resource(
             address=res.address,
             type=res.type,
             attributes=copy.deepcopy(res.attributes),
             rule_sources=new_rule_sources,
             merged_into=res.merged_into,
+            file_path=res.file_path,
         )
-        new_graph.add_resource(new_res)
+        new_graph.add_resource(res_copy)
 
     return new_graph
 
@@ -265,22 +398,28 @@ class AutoRepairEngine:
             is_complete_proof=True,
         )
 
+        deleted_list = [
+            {
+                "resource_address": addr,
+                "statement_index": idx,
+                "rule_type": type(rule).__name__,
+                "rule_details": str(rule),
+            }
+            for addr, idx, rule in found_deletion
+        ]
+        target_res = graph.resources.get(resource_address)
+        file_path = target_res.file_path if target_res else None
+        patch_str = generate_unified_diff(file_path, deleted_list, resource_address)
+
         return RemediationResult(
             status="REMEDIATED_MINIMAL" if final_ver and final_ver.status == "UNSAT" else "FAILED",
             resource_address=resource_address,
             pattern=pattern,
-            deleted_rules=[
-                {
-                    "resource_address": addr,
-                    "statement_index": idx,
-                    "rule_type": type(rule).__name__,
-                    "rule_details": str(rule),
-                }
-                for addr, idx, rule in found_deletion
-            ],
+            deleted_rules=deleted_list,
             reverified_status=final_ver.status if final_ver else "UNKNOWN",
             initial_certificate=initial_cert,
             reverified_certificate=reverified_cert,
+            patch=patch_str,
             message=f"Successfully remediated '{resource_address}' via minimal deletion of {len(found_deletion)} rule(s).",
         )
 

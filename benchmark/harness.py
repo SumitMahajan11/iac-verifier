@@ -159,6 +159,9 @@ if __name__ == "__main__":
     if os.path.exists(gt_path):
         harness = BenchmarkHarness(gt_path)
         metrics = harness.evaluate()
+        out_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "harness_output.json")
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=2)
         print(json.dumps(metrics, indent=2))
     else:
         print(f"Ground truth dataset not found at {gt_path}")

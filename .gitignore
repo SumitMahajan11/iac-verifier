@@ -3,7 +3,15 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.iac_cache/
+certs/
+canary_*.txt
+checkov_*.json
+tfsec_*.json
+pytest_output.txt
+harness_output.json
 .env
 dist/
 build/
 *.egg-info/
+
