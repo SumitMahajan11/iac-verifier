@@ -142,7 +142,7 @@ kubectl wait --for=condition=ready pod -l app=iac-webhook --timeout=60s
 ```bash
 kubectl apply -f k8s/unsafe-configmap.yaml
 ```
-**Actual Expected Output**:
+**Recorded Live Output**:
 ```text
 Error from server (InternalError): Internal error occurred: admission webhook "iac-verifier.default.svc" denied the request: Verification failed. Vulnerabilities detected:
 [SG_OVER_EXPOSURE] aws_security_group.unsafe_sg: Security group 'aws_security_group.unsafe_sg' exposes sensitive ports to public IP range
@@ -152,7 +152,7 @@ Error from server (InternalError): Internal error occurred: admission webhook "i
 ```bash
 kubectl apply -f k8s/safe-configmap.yaml
 ```
-**Actual Expected Output**:
+**Recorded Live Output**:
 ```text
 configmap/safe-infrastructure created
 ```
@@ -161,7 +161,7 @@ configmap/safe-infrastructure created
 ```bash
 kubectl apply -f k8s/unlabeled-configmap.yaml
 ```
-**Actual Expected Output**:
+**Recorded Live Output**:
 ```text
 configmap/unlabeled-infrastructure created
 ```
