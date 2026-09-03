@@ -1,0 +1,99 @@
+name: Webhook Live Cluster Integration Test
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'cli/webhook.py'
+      - 'solver/**'
+      - 'parser/**'
+      - 'encoder/**'
+      - 'graph/**'
+      - 'k8s/**'
+      - 'Dockerfile.webhook'
+      - '.github/workflows/webhook-live-test.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'cli/webhook.py'
+      - 'solver/**'
+      - 'parser/**'
+      - 'encoder/**'
+      - 'graph/**'
+      - 'k8s/**'
+      - 'Dockerfile.webhook'
+      - '.github/workflows/webhook-live-test.yml'
+
+jobs:
+  webhook-live-test:
+    name: K8s Admission Webhook Live Cluster Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install cryptography pyyaml fastapi uvicorn z3-solver python-hcl2
+
+      - name: Generate Certificates & K8s Manifests
+        run: |
+          python k8s/generate_certs.py
+          python k8s/generate_k8s_manifests.py
+
+      - name: Build Docker Image
+        run: |
+          docker build -t iac-webhook:latest -f Dockerfile.webhook .
+
+      - name: Create KinD Cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: kind
+
+      - name: Load Docker Image into KinD
+        run: |
+          kind load docker-image iac-webhook:latest --name kind
+
+      - name: Deploy Admission Webhook
+        run: |
+          kubectl apply -f k8s/webhook-deployment.yaml
+          kubectl apply -f k8s/webhook-configuration.yaml
+
+      - name: Wait for Webhook Readiness
+        run: |
+          echo "Waiting for admission webhook pod readiness..."
+          kubectl wait --for=condition=ready pod -l app=iac-webhook --timeout=60s
+          kubectl get pods -o wide
+
+      - name: Test Reject Case (Unsafe Manifest)
+        run: |
+          echo "=== Testing Reject Case (Unsafe ConfigMap) ==="
+          if OUTPUT=$(kubectl apply -f k8s/unsafe-configmap.yaml 2>&1); then
+            echo "FAILED: Unsafe ConfigMap was admitted when it should have been rejected!"
+            exit 1
+          else
+            echo "SUCCESS: Admission webhook rejected unsafe ConfigMap."
+            echo "$OUTPUT"
+            if ! echo "$OUTPUT" | grep -q "Verification failed. Vulnerabilities detected:"; then
+              echo "FAILED: Expected rejection error message not found in output!"
+              exit 1
+            fi
+          fi
+
+      - name: Test Admit Case (Safe Manifest)
+        run: |
+          echo "=== Testing Admit Case (Safe ConfigMap) ==="
+          kubectl apply -f k8s/safe-configmap.yaml
+          kubectl get configmap safe-infrastructure -o yaml
+          echo "SUCCESS: Admission webhook admitted safe ConfigMap."
+
+      - name: Tear Down KinD Cluster
+        if: always()
+        run: |
+          kind delete cluster --name kind || true

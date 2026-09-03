@@ -68,4 +68,4 @@ with open("certs/server.key", "wb") as f:
     ))
 
 ca_b64 = base64.b64encode(ca_pem).decode("utf-8")
-print(f"CA Bundle Base64: {ca_b64}")
+print(f"CA Bundle Base64 generated successfully.")

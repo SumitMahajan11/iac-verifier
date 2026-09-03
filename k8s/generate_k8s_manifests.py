@@ -6,7 +6,7 @@ with open("certs/ca.crt", "rb") as f:
 
 ca_b64 = base64.b64encode(ca_bytes).decode("utf-8")
 
-os.makedirs("scratch/k8s", exist_ok=True)
+os.makedirs("k8s", exist_ok=True)
 
 webhook_config_yaml = f"""apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -33,7 +33,7 @@ webhooks:
     failurePolicy: Fail
 """
 
-with open("scratch/k8s/webhook-configuration.yaml", "w") as f:
+with open("k8s/webhook-configuration.yaml", "w") as f:
     f.write(webhook_config_yaml)
 
 unsafe_cm_yaml = """apiVersion: v1
@@ -54,7 +54,7 @@ data:
     }
 """
 
-with open("scratch/k8s/unsafe-configmap.yaml", "w") as f:
+with open("k8s/unsafe-configmap.yaml", "w") as f:
     f.write(unsafe_cm_yaml)
 
 safe_cm_yaml = """apiVersion: v1
@@ -75,7 +75,7 @@ data:
     }
 """
 
-with open("scratch/k8s/safe-configmap.yaml", "w") as f:
+with open("k8s/safe-configmap.yaml", "w") as f:
     f.write(safe_cm_yaml)
 
-print("Generated Kubernetes manifests in scratch/k8s/")
+print("Generated Kubernetes manifests in k8s/")

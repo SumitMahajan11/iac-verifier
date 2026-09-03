@@ -14,4 +14,6 @@ harness_output.json
 dist/
 build/
 *.egg-info/
-
+*.exe
+kind.exe
+actionlint.exe
