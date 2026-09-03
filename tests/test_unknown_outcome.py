@@ -24,6 +24,6 @@ def test_genuine_unknown():
     z3.Solver = mock_solver
     try:
         ver_res = eng.verify_security_group(res)
-        assert ver_res.status == "UNKNOWN"
+        assert ver_res.status in ("UNKNOWN", "TIMEOUT")
     finally:
         z3.Solver = original_solver

@@ -126,11 +126,13 @@ class VerificationEngine:
     Z3 SMT Solver interface and verification orchestrator.
     Encodes resource graphs into symbolic Z3 SMT constraints and checks safety.
     """
-    def __init__(self, use_cache: bool = True):
+    def __init__(self, use_cache: bool = True, timeout_ms: Optional[int] = None):
         self.cache = VerificationCache() if use_cache else None
+        self.timeout_ms = timeout_ms
 
-    def verify_graph(self, graph: ResourceGraph) -> List[VerificationResult]:
+    def verify_graph(self, graph: ResourceGraph, timeout_ms: Optional[int] = None) -> List[VerificationResult]:
         results: List[VerificationResult] = []
+        eff_timeout = timeout_ms or self.timeout_ms
 
         for address, resource in graph.resources.items():
             # Skip resources that were merged into a parent resource
@@ -145,7 +147,7 @@ class VerificationEngine:
                     cache_key = compute_cache_key(graph, address, "SG_OVER_EXPOSURE")
                     res = self.cache.get(cache_key)
                 if not res:
-                    res = self.verify_security_group(resource)
+                    res = self.verify_security_group(resource, timeout_ms=eff_timeout)
                     if res and self.cache and cache_key:
                         self.cache.put(cache_key, res)
                 if res:
@@ -159,7 +161,7 @@ class VerificationEngine:
                     cache_key = compute_cache_key(graph, address, "IAM_WILDCARD_ALLOW")
                     res = self.cache.get(cache_key)
                 if not res:
-                    res = self.verify_iam_policy(resource)
+                    res = self.verify_iam_policy(resource, timeout_ms=eff_timeout)
                     if res and self.cache and cache_key:
                         self.cache.put(cache_key, res)
                 if res:
@@ -167,7 +169,9 @@ class VerificationEngine:
 
         return results
 
-    def verify_security_group(self, resource: Resource) -> Optional[VerificationResult]:
+    def verify_security_group(
+        self, resource: Resource, timeout_ms: Optional[int] = None
+    ) -> Optional[VerificationResult]:
         encoded = encode_sg_resource_symbolic(resource)
 
         if isinstance(encoded, Unresolved):
@@ -182,6 +186,10 @@ class VerificationEngine:
 
         z3.set_param("proof", True)
         solver = z3.Solver()
+        eff_timeout = timeout_ms or self.timeout_ms
+        if eff_timeout is not None:
+            solver.set("timeout", eff_timeout)
+
         solver.add(unsafe_formula)
         check_res = solver.check()
 
@@ -236,14 +244,19 @@ class VerificationEngine:
             )
 
         else:
+            reason = solver.reason_unknown()
+            status = "TIMEOUT" if reason == "timeout" else "UNKNOWN"
+            msg = f"Z3 solver timed out for security group '{resource.address}'" if reason == "timeout" else f"Z3 solver returned UNKNOWN for security group '{resource.address}'"
             return VerificationResult(
-                status="UNKNOWN",
+                status=status,
                 resource_address=resource.address,
                 pattern="SG_OVER_EXPOSURE",
-                message=f"Z3 solver returned UNKNOWN for security group '{resource.address}'",
+                message=msg,
             )
 
-    def verify_iam_policy(self, resource: Resource) -> Optional[VerificationResult]:
+    def verify_iam_policy(
+        self, resource: Resource, timeout_ms: Optional[int] = None
+    ) -> Optional[VerificationResult]:
         encoded = encode_iam_scope_symbolic(resource.rule_sources, scope_id=resource.address)
 
         if isinstance(encoded, Unresolved):
@@ -258,6 +271,10 @@ class VerificationEngine:
 
         z3.set_param("proof", True)
         solver = z3.Solver()
+        eff_timeout = timeout_ms or self.timeout_ms
+        if eff_timeout is not None:
+            solver.set("timeout", eff_timeout)
+
         solver.add(unsafe_formula)
         check_res = solver.check()
 
@@ -311,11 +328,14 @@ class VerificationEngine:
             )
 
         else:
+            reason = solver.reason_unknown()
+            status = "TIMEOUT" if reason == "timeout" else "UNKNOWN"
+            msg = f"Z3 solver timed out for IAM resource '{resource.address}'" if reason == "timeout" else f"Z3 solver returned UNKNOWN for IAM resource '{resource.address}'"
             return VerificationResult(
-                status="UNKNOWN",
+                status=status,
                 resource_address=resource.address,
                 pattern="IAM_WILDCARD_ALLOW",
-                message=f"Z3 solver returned UNKNOWN for IAM resource '{resource.address}'",
+                message=msg,
             )
 
     def verify_privilege_escalation(
@@ -357,6 +377,7 @@ class VerificationEngine:
 
         # Identify target roles
         target_roles: set[str] = set()
+        eff_timeout = timeout_ms or self.timeout_ms
         if target_resource:
             if target_resource in trust_graph.nodes:
                 target_roles.add(target_resource)
@@ -384,6 +405,8 @@ class VerificationEngine:
                         if not isinstance(encoded_scope, Unresolved):
                             _, _, unsafe_formula = encoded_scope
                             s = z3.Solver()
+                            if eff_timeout is not None:
+                                s.set("timeout", eff_timeout)
                             s.add(unsafe_formula)
                             if s.check() == z3.sat:
                                 target_roles.add(address)
@@ -419,8 +442,8 @@ class VerificationEngine:
 
             z3.set_param("proof", True)
             solver = z3.Solver()
-            if timeout_ms is not None:
-                solver.set("timeout", timeout_ms)
+            if eff_timeout is not None:
+                solver.set("timeout", eff_timeout)
 
             solver.add(formula)
             check_res = solver.check()
@@ -439,11 +462,14 @@ class VerificationEngine:
                     self.cache.put(cache_key, res)
                 return res
             elif check_res == z3.unknown:
+                reason = solver.reason_unknown()
+                status = "TIMEOUT" if reason == "timeout" else "UNKNOWN"
+                msg = f"Z3 solver timed out during reachability check at hop {current_k}" if reason == "timeout" else f"Z3 solver returned UNKNOWN during reachability check at hop {current_k}"
                 res = VerificationResult(
-                    status="UNKNOWN",
+                    status=status,
                     resource_address=target_resource or "graph",
                     pattern="PRIVILEGE_ESCALATION_REACHABILITY",
-                    message=f"Z3 solver returned UNKNOWN during reachability check at hop {current_k}",
+                    message=msg,
                 )
                 if self.cache and cache_key:
                     self.cache.put(cache_key, res)
