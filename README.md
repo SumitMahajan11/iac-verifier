@@ -2,6 +2,8 @@
 
 [![IaC Verification & Test Matrix](https://github.com/SumitMahajan11/iac-verifier/actions/workflows/verify.yml/badge.svg)](https://github.com/SumitMahajan11/iac-verifier/actions/workflows/verify.yml)
 [![Webhook Live Cluster Integration Test](https://github.com/SumitMahajan11/iac-verifier/actions/workflows/webhook-live-test.yml/badge.svg)](https://github.com/SumitMahajan11/iac-verifier/actions/workflows/webhook-live-test.yml)
+[![SBOM Artifacts](https://img.shields.io/badge/SBOM-CycloneDX%20v1.7-blue)](https://github.com/SumitMahajan11/iac-verifier/actions/workflows/verify.yml)
+
 
 Static IaC verifier using Z3 for SMT-based reachability proofs on Terraform infrastructure graphs.
 

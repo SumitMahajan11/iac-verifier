@@ -49,3 +49,42 @@ jobs:
         with:
           path: './fixtures/phase2/sg_restricted_ssh.tf'
           json: 'false'
+
+  sbom:
+    name: Generate & Publish Software Bill of Materials (SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build Webhook Container Image
+        run: |
+          docker build -t iac-webhook:latest -f Dockerfile.webhook .
+
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate Container Image SBOM (CycloneDX JSON)
+        run: |
+          syft iac-webhook:latest --output cyclonedx-json=container_sbom.json
+
+      - name: Generate Python Dependency Tree SBOM (CycloneDX JSON)
+        run: |
+          syft dir:. --exclude "./fixtures/**" --output cyclonedx-json=python_sbom.json
+
+      - name: Upload SBOM Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-artifacts
+          path: |
+            container_sbom.json
+            python_sbom.json
+
