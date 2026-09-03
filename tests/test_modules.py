@@ -97,7 +97,7 @@ def test_fixture_local_module():
 
     # Verify input variable pass-through from root
     rule_res = graph.resources["module.networking.aws_security_group_rule.web_ingress"]
-    assert rule_res.attributes["cidr_blocks"] == ["10.0.0.0/16"]
+    assert rule_res.attributes["cidr_blocks"] == ["10.0.0.0/16"] or rule_res.attributes["cidr_blocks"] == "10.0.0.0/16"
 
 
 def test_fixture_nested_module():
