@@ -44,11 +44,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install cryptography pyyaml fastapi uvicorn z3-solver python-hcl2
 
-      - name: Generate Certificates & K8s Manifests
-        run: |
-          python k8s/generate_certs.py
-          python k8s/generate_k8s_manifests.py
-
       - name: Build Docker Image
         run: |
           docker build -t iac-webhook:latest -f Dockerfile.webhook .
@@ -62,6 +57,16 @@ jobs:
         run: |
           kind load docker-image iac-webhook:latest --name kind
 
+      - name: Install cert-manager
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.17.0/cert-manager.yaml
+          kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=120s
+
+      - name: Deploy cert-manager Issuer & Certificate
+        run: |
+          kubectl apply -f k8s/cert-manager-issuer-cert.yaml
+          kubectl wait --for=condition=Ready certificate/iac-webhook-cert --timeout=60s
+
       - name: Enforce Pod Security Standards Restricted Profile
         run: |
           kubectl label --overwrite namespace default pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/enforce-version=latest
@@ -71,6 +76,10 @@ jobs:
           kubectl apply -f k8s/webhook-deployment.yaml
           kubectl apply -f k8s/webhook-networkpolicy.yaml
           kubectl apply -f k8s/webhook-configuration.yaml
+
+      - name: Verify caBundle Auto-Injection
+        run: |
+          kubectl get validatingwebhookconfiguration iac-verifier-webhook -o yaml
 
       - name: Wait for Webhook Readiness
         run: |

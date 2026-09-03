@@ -29,7 +29,6 @@ COPY parser/ /app/parser/
 COPY solver/ /app/solver/
 COPY encoder/ /app/encoder/
 COPY graph/ /app/graph/
-COPY certs/ /app/certs/
 
 # Set ownership to non-root user
 RUN chown -R appuser:appgroup /app
@@ -39,4 +38,4 @@ USER appuser:appgroup
 
 EXPOSE 8443
 
-CMD ["uvicorn", "cli.webhook:app", "--host", "0.0.0.0", "--port", "8443", "--ssl-keyfile", "/app/certs/server.key", "--ssl-certfile", "/app/certs/server.crt"]
+CMD ["uvicorn", "cli.webhook:app", "--host", "0.0.0.0", "--port", "8443", "--ssl-keyfile", "/app/certs/tls.key", "--ssl-certfile", "/app/certs/tls.crt"]

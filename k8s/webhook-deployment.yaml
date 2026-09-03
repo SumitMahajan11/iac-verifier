@@ -50,6 +50,14 @@ spec:
             port: 8443
           initialDelaySeconds: 2
           periodSeconds: 2
+        volumeMounts:
+        - name: tls-certs
+          mountPath: /app/certs
+          readOnly: true
+      volumes:
+      - name: tls-certs
+        secret:
+          secretName: iac-webhook-tls-secret
 ---
 apiVersion: v1
 kind: Service
