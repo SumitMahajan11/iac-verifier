@@ -13,6 +13,9 @@ spec:
   - Ingress
   - Egress
   ingress:
+  # Note: Allows HTTPS 8443 traffic from kube-system namespace and same-namespace (default) pods.
+  # In production non-kind clusters, API server traffic originates from control-plane nodes / host network,
+  # which may require specific ipBlock or control-plane namespace rules.
   - from:
     - namespaceSelector:
         matchLabels:
@@ -21,4 +24,5 @@ spec:
     ports:
     - protocol: TCP
       port: 8443
+  # Default Deny Egress: The webhook process performs zero outbound network calls (logs to stdout, exposes /metrics for scraping).
   egress: []
