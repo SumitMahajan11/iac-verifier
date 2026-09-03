@@ -1,0 +1,6 @@
+[submodule "fixtures/corpora/sadcloud"]
+	path = fixtures/corpora/sadcloud
+	url = https://github.com/cesar-rodriguez/sadcloud.git
+[submodule "fixtures/corpora/terragoat"]
+	path = fixtures/corpora/terragoat
+	url = https://github.com/bridgecrewio/terragoat.git
