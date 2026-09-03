@@ -7,7 +7,7 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir fastapi uvicorn z3-solver python-hcl2 pyyaml cryptography
+    pip install --no-cache-dir fastapi uvicorn z3-solver python-hcl2 pyyaml cryptography structlog prometheus_client
 
 # Stage 2: Hardened, non-root runtime image
 FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534 AS runner

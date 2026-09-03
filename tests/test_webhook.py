@@ -204,3 +204,48 @@ def test_webhook_pathological_timeout(monkeypatch):
     assert "Verification timeout:" in msg
     assert "failing closed" in msg
 
+
+def test_webhook_metrics_endpoint():
+    """Verify that the /metrics endpoint returns Prometheus formatted metrics."""
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"] or "version=0.0.4" in response.headers["content-type"]
+    metrics_text = response.text
+    assert "iac_verifier_webhook_requests_total" in metrics_text
+    assert "iac_verifier_webhook_solver_timeout_total" in metrics_text
+    assert "iac_verifier_webhook_request_duration_seconds" in metrics_text
+    assert "iac_verifier_webhook_solver_duration_seconds" in metrics_text
+
+
+def test_webhook_metrics_increment_on_timeout(monkeypatch):
+    """Verify that solver timeout increments the solver_timeout metric counter."""
+    import asyncio
+    async def mock_wait_for(fut, timeout):
+        if asyncio.iscoroutine(fut):
+            fut.close()
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr("asyncio.wait_for", mock_wait_for)
+
+    payload = {
+        "apiVersion": "admission.k8s.io/v1",
+        "kind": "AdmissionReview",
+        "request": {
+            "uid": "metric-timeout-uid",
+            "object": {
+                "kind": "ConfigMap",
+                "data": {
+                    "main.tf": "resource \"aws_security_group\" \"test\" {}"
+                }
+            }
+        }
+    }
+
+    client.post("/validate", json=payload)
+
+    metrics_resp = client.get("/metrics")
+    assert metrics_resp.status_code == 200
+    assert "iac_verifier_webhook_solver_timeout_total" in metrics_resp.text
+    assert 'iac_verifier_webhook_requests_total{outcome="solver_timeout"}' in metrics_resp.text
+
+

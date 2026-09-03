@@ -35,6 +35,9 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+        env:
+        - name: WEBHOOK_TIMEOUT_SECONDS
+          value: "8.0"
         readinessProbe:
           tcpSocket:
             port: 8443
