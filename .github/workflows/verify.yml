@@ -1,4 +1,4 @@
-name: IaC Verification Workflow
+name: IaC Verification & Test Matrix
 
 on:
   push:
@@ -7,6 +7,32 @@ on:
     branches: [ main, master ]
 
 jobs:
+  pytest-matrix:
+    name: Pytest Suite (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install z3-solver python-hcl2 pyyaml structlog prometheus-client fastapi uvicorn cryptography pytest pytest-cov
+          pip install -e .
+
+      - name: Run Full Pytest Suite
+        run: |
+          pytest -v
+
   iac-verify:
     name: Verify Terraform Security Invariants
     runs-on: ubuntu-latest
