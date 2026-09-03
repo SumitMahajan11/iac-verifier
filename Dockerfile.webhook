@@ -1,9 +1,27 @@
-FROM python:3.11-slim
+# Stage 1: Build virtual environment and dependencies
+FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534 AS builder
 
 WORKDIR /app
 
-# Install dependencies
-RUN pip install --no-cache-dir fastapi uvicorn z3-solver python-hcl2 pyyaml cryptography
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir fastapi uvicorn z3-solver python-hcl2 pyyaml cryptography
+
+# Stage 2: Hardened, non-root runtime image
+FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534 AS runner
+
+WORKDIR /app
+
+# Create non-root system user & group (UID/GID 1000)
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup -s /bin/false -m appuser
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
 
 # Copy application files
 COPY cli/ /app/cli/
@@ -12,6 +30,12 @@ COPY solver/ /app/solver/
 COPY encoder/ /app/encoder/
 COPY graph/ /app/graph/
 COPY certs/ /app/certs/
+
+# Set ownership to non-root user
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser:appgroup
 
 EXPOSE 8443
 
