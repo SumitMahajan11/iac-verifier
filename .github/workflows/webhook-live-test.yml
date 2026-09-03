@@ -69,6 +69,7 @@ jobs:
       - name: Deploy Admission Webhook
         run: |
           kubectl apply -f k8s/webhook-deployment.yaml
+          kubectl apply -f k8s/webhook-networkpolicy.yaml
           kubectl apply -f k8s/webhook-configuration.yaml
 
       - name: Wait for Webhook Readiness

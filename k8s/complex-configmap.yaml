@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: complex-infrastructure
+  namespace: default
+data:
+  network.tf: |
+    resource "aws_security_group" "web_sg" {
+      name        = "web-server-sg"
+      description = "Allow HTTPS from corporate subnet"
+      vpc_id      = "vpc-12345678"
+
+      ingress {
+        from_port   = 443
+        to_port     = 443
+        protocol    = "tcp"
+        cidr_blocks = ["10.200.0.0/16"]
+      }
+
+      egress {
+        from_port   = 443
+        to_port     = 443
+        protocol    = "tcp"
+        cidr_blocks = ["10.0.0.0/8"]
+      }
+    }
+
+    resource "aws_security_group" "db_sg" {
+      name        = "database-sg"
+      description = "Allow MySQL from web security group"
+      vpc_id      = "vpc-12345678"
+
+      ingress {
+        from_port       = 3306
+        to_port         = 3306
+        protocol        = "tcp"
+        security_groups = [aws_security_group.web_sg.id]
+      }
+
+      egress {
+        from_port   = 3306
+        to_port     = 3306
+        protocol    = "tcp"
+        cidr_blocks = ["10.0.0.0/8"]
+      }
+    }
+
+    resource "aws_security_group" "app_sg" {
+      name        = "app-server-sg"
+      description = "Allow internal App traffic"
+      vpc_id      = "vpc-12345678"
+
+      ingress {
+        from_port   = 8080
+        to_port     = 8080
+        protocol    = "tcp"
+        cidr_blocks = ["10.100.0.0/16"]
+      }
+
+      egress {
+        from_port   = 8080
+        to_port     = 8080
+        protocol    = "tcp"
+        cidr_blocks = ["10.0.0.0/8"]
+      }
+    }
+
+  iam_policy.tf: |
+    resource "aws_iam_policy" "app_policy" {
+      name = "application-s3-read-policy"
+
+      policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Action   = ["s3:GetObject"]
+            Effect   = "Allow"
+            Resource = ["arn:aws:s3:::my-app-data-bucket/*"]
+          }
+        ]
+      })
+    }
