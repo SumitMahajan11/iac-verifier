@@ -1,8 +1,8 @@
 # IaC Verifier — Project Status
 
 ## Current Phase
-**Current Status:** Phase 11 Azure Governance Benchmark & Policy Encoder Verified (211 Tests Passing, 1.0 Precision/Recall)
-**Next Planned Phase:** Pause new scope expansion; focus exclusively on re-grounding existing claims and independent audit.
+**Current Status:** Fully Audited & Verified (215 Tests Passing, 1.0 Precision/Recall across AWS & Azure corpora)
+**Next Planned Phase:** Repository archived/shelved in production-verified state.
 
 ## Exit Criteria Status
 - [x] Phase 0: Project Scaffolding & Repository Governance Structure
@@ -17,6 +17,7 @@
 - [x] Phase 9: GitHub Action CI/CD Integration
 - [x] Phase 10: ARM Native Template Support (`parser/arm_parser.py`) [JSON Template Extraction, Variable/Parameter Resolution, Dynamic Expression Fail-Closed Gating, Cross-Format RBAC/NSG Equivalence]
 - [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`, `benchmark/azure_real_world_ground_truth.json`) [Azure Synthetic Corpus: 32 total JSON entries / 32 evaluated cases; 27 binary decidable (16 SAT, 11 UNSAT) + 5 UNRESOLVABLE; 1.0 Precision, 1.0 Recall, 100% Unresolvable Accuracy | Azure Real-World Corpus: 3 total entries / 3 evaluated cases; 3 binary decidable (1 SAT, 2 UNSAT); 1.0 Precision, 1.0 Recall]
+- [x] Tier 1 Audit: Complete Corpus Audit & IAM Encoder Remediation (Heredoc parser bug fix, `NotAction` `z3.Not(z3.Or(...))` SMT encoding, fail-closed `is_unsupported_glob` for mid-string globs, verb-level wildcard spec reconciliation — **verified in commits `b915fb0`, `3b2a4a0`, `8f5d8a9`, `e8da6b3` / 2026-09-04**)
 - [x] Tier 3 Part A: Compositional Incremental Verification (`verify_incremental` & subgraph cache invalidation)
 - [x] Tier 3 Part B: Kubernetes Validating Admission Webhook (Live `kind` cluster `kubectl apply` verification — **verified live in commit `0081cd5` [supersedes `34f9df9`] / 2026-09-04**)
   > ✅ *Live Verification (commit `0081cd5`, 2026-09-04):* Re-provisioned `kind` cluster, deployed `iac-webhook` container, registered `ValidatingWebhookConfiguration`, and empirically verified admission pipeline: `unsafe_manifest.yaml` rejected with `[SG_OVER_EXPOSURE]` denial message, `safe_manifest.yaml` admitted successfully.
@@ -27,8 +28,8 @@
 *Note on GCP Status: GCP parser scaffolding (`parser/gcp_parser.py`) is implemented for AST graph ingestion. SMT verification encoding for GCP is explicitly paused/deferred per ADR guidelines ("Azure real-world gap must be closed before GCP SMT solver implementation"). GCP SMT encoder functions remain unbuilt stub signatures (0% SMT precision/recall coverage).
 
 ## Test Suite Status
-- **Pass Count:** 211 passed in ~7.4s
-- **Line Coverage:** 89% overall across 211 tests
+- **Pass Count:** 215 passed in ~8.4s
+- **Line Coverage:** 89% overall across 215 tests
 - **Verification Command:** `python -m pytest --cov=. --cov-report=term-missing`
 
 
