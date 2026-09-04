@@ -69,7 +69,7 @@ class ASTRepairEngine:
 
         lines = normalized_code.splitlines(keepends=True)
 
-        # Locate target resource block node
+        # Locate target resource block node recursively across all CST branches
         resource_block = ASTRepairEngine._find_resource_block(
             tree, target_resource_type, target_resource_name
         )
@@ -122,37 +122,28 @@ class ASTRepairEngine:
 
     @staticmethod
     def _find_resource_block(tree: Any, res_type: str, res_name: str) -> Optional[Any]:
-        """Locates the Lark Tree block node matching resource type and name."""
+        """Locates the Lark Tree block node matching resource type and name using recursive DFS."""
+        if not tree:
+            return None
+
         res_type_clean = res_type.strip('"\'')
         res_name_clean = res_name.strip('"\'')
 
-        def _search_body(body_node):
-            for block in getattr(body_node, "children", []):
-                if hasattr(block, "data") and block.data == "block":
-                    children = block.children
-                    if len(children) >= 3:
-                        id_token_val = _get_val(children[0]).strip().lower()
-                        rtype = _get_val(children[1]).strip()
-                        rname = _get_val(children[2]).strip()
-                        if id_token_val == "resource" and rtype == res_type_clean and rname == res_name_clean:
-                            return block
-            return None
+        if hasattr(tree, "data") and tree.data == "block":
+            children = getattr(tree, "children", [])
+            if len(children) >= 3:
+                id_token_val = _get_val(children[0]).strip().lower()
+                rtype = _get_val(children[1]).strip()
+                rname = _get_val(children[2]).strip()
+                if id_token_val == "resource" and rtype == res_type_clean and rname == res_name_clean:
+                    return tree
 
-        if getattr(tree, "data", None) == "body":
-            res = _search_body(tree)
-            if res:
-                return res
+        for child in getattr(tree, "children", []):
+            if hasattr(child, "data"):
+                found = ASTRepairEngine._find_resource_block(child, res_type_clean, res_name_clean)
+                if found:
+                    return found
 
-        for top_node in getattr(tree, "children", []):
-            if hasattr(top_node, "data"):
-                if top_node.data == "body":
-                    res = _search_body(top_node)
-                    if res:
-                        return res
-                elif top_node.data == "start":
-                    res = ASTRepairEngine._find_resource_block(top_node, res_type_clean, res_name_clean)
-                    if res:
-                        return res
         return None
 
     @staticmethod
@@ -167,7 +158,7 @@ class ASTRepairEngine:
     def _collect_statement_nodes(res_body: Any) -> List[Any]:
         """
         Collects all repairable statement nodes in structural order:
-          - Standalone ingress/egress/statement blocks
+          - Standalone ingress/egress/statement/security_rule blocks
           - Elements inside ingress/egress list attributes
           - Elements inside policy = jsonencode({ Statement = [...] })
         """
@@ -180,7 +171,7 @@ class ASTRepairEngine:
             # Case 1: Standalone block (ingress { ... }, egress { ... }, security_rule { ... })
             if child.data == "block":
                 block_id = _get_val(child.children[0]).strip().lower() if len(child.children) > 0 else ""
-                if block_id in ("ingress", "egress", "statement", "security_rule"):
+                if block_id in ("ingress", "egress", "statement", "security_rule", "rule", "rules", "custom_rules"):
                     statement_nodes.append(child)
 
             # Case 2 & 3: Attributes (ingress = [...], policy = jsonencode(...))
@@ -188,7 +179,7 @@ class ASTRepairEngine:
                 attr_id = _get_val(child.children[0]).strip().lower() if len(child.children) > 0 else ""
 
                 # Ingress / Egress list attribute
-                if attr_id in ("ingress", "egress"):
+                if attr_id in ("ingress", "egress", "security_rule", "rules", "security_rules"):
                     expr_term = next((c for c in child.children if hasattr(c, "data") and c.data == "expr_term"), None)
                     if expr_term and hasattr(expr_term, "children") and len(expr_term.children) > 0 and getattr(expr_term.children[0], "data", None) == "tuple":
                         tuple_node = expr_term.children[0]
