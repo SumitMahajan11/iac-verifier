@@ -83,11 +83,11 @@
 **Files modified:** docs/phase4_comparative_evaluation.md, benchmark/ground_truth.json, solver/engine.py
 **Specific functions/logic changed:** 
 1. Added 4 real-corpus safe resources (UNSAT) from Terragoat and Sadcloud to test precision against true negatives, expanding dataset to 18 real-world cases.
-2. Updated VerificationEngine.verify_graph in solver/engine.py to evaluate ws_iam_user_policy and ws_iam_group_policy resources.
+2. Updated VerificationEngine.verify_graph in solver/engine.py to evaluate aws_iam_user_policy and aws_iam_group_policy resources.
 **Test output summary:** BenchmarkHarness: 18 total cases, Precision 1.0 (0 false positives), Recall 1.0 (identified all structural SAT vulnerabilities).
 **Design decisions & rationale (min 2):** 
-1. **Precision Proofing**: By adding ws_security_group.unneeded_security_group (restricted to 127.0.0.0/8), we proved the SMT constraint accurately classifies strict private CIDRs as UNSAT (safe) without triggering false positives.
-2. **Linter Noise vs Formal Proof**: Documented Checkov's false positives on restricted-ingress SGs (like ws_security_group.default in Terragoat) which occur because Checkov flags open *egress*, confirming that generalized linters are inherently noisier than strict invariant evaluation.
+1. **Precision Proofing**: By adding aws_security_group.unneeded_security_group (restricted to 127.0.0.0/8), we proved the SMT constraint accurately classifies strict private CIDRs as UNSAT (safe) without triggering false positives.
+2. **Linter Noise vs Formal Proof**: Documented Checkov's false positives on restricted-ingress SGs (like aws_security_group.default in Terragoat) which occur because Checkov flags open *egress*, confirming that generalized linters are inherently noisier than strict invariant evaluation.
 **Next immediate step:** Tier 1 Exit Criteria strictly met and verified. Project handoff.
 
 ## 2026-08-31 - Session 8
@@ -99,3 +99,19 @@
 **Design decisions & rationale:** 
 1. **Scientific Honesty**: Acknowledged the circularity gap in IAM precision evaluation. True independent testing would require a held-out engine state that doesn't exist for those types, so caveat is proper.
 **Next immediate step:** Ready for final project sign-off.
+
+## 2026-09-04 — Session 9
+**Phase / area worked on:** Tier 1 Audit — Reconciling IAM Wildcard Specification & Implementation Boundary
+**Files modified:** `encoder/iam_encoder.py`, `README.md`, `tests/test_iam_encoder.py`, `fixtures/phase2/iam_not_action_deny.tf`, `PROJECT_LOG.md`
+**Specific functions/logic changed:** 
+- `encoder/iam_encoder.py`: Implemented `is_unsupported_glob(pattern)` to fail closed with `Unresolved` on true mid-string globs (`s3:Get*Object`, `?`, `[...]`), while preserving `z3.PrefixOf` encoding for trailing-prefix wildcards (`ec2:Describe*`, `s3:*`, `*`). Added `stmt_match` `Unresolved` check in `encode_iam_scope_symbolic` and refined `NotAction` wildcard tracking.
+- `README.md`: Reconciled §5 spec text to explicitly state that trailing verb-prefix wildcards (`ec2:Describe*`, `s3:Get*`) are supported via `z3.PrefixOf` SMT String theory, while true mid-string globs (`s3:Get*Object`) fail closed as `Unresolved`.
+- `tests/test_iam_encoder.py`: Added tests for `NotAction` `PrefixOf` resolution, `NotAction` Deny service exclusion, and `Unresolved` fail-closed posture for mid-string globs.
+**Test output summary:** 214 passed in 7.5s. Benchmark harness: 27 evaluated cases, Precision 1.0, Recall 1.0.
+
+**Design Decisions & First-Principles Rationale:**
+1. **Specification vs. Implementation Reconciliation**: Reconciled a documented discrepancy between the Phase 2 README §5 spec text (which incorrectly stated verb-level wildcards were out-of-scope exact matches) and the shipped encoder implementation (which used `PrefixOf` for all trailing `*` patterns). Formally adopted trailing verb-prefix wildcards into the v1 specification rather than downgrading implementation fidelity.
+2. **Security Posture Analysis (`Allow` vs `NotAction`)**:
+   - **For `Allow` statements**: `PrefixOf("ec2:Describe", action_var)` over-approximates allowed actions by including all `ec2:Describe...` calls, which is conservative (fail-safe) for vulnerability discovery.
+   - **For `NotAction` statements**: `PrefixOf` maintains exact semantic fidelity to AWS IAM authorization semantics. Reverting trailing verb wildcards in `NotAction` to exact string matching or `Unresolved` would cause the verifier to diverge from real AWS IAM authorization behavior.
+   - **For True Mid-String Globs (`s3:Get*Object`)**: Mid-string wildcards cannot be represented via `PrefixOf`. Falling through to literal string match (`action == "s3:Get*Object"`) would introduce silent false negatives. The verifier strictly returns `Unresolved` (fail closed).
