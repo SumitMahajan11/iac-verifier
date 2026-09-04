@@ -72,55 +72,71 @@ class ASTRepairEngine:
 
         try:
             import hcl2
-            errors.append(f"hcl2 imported, dir(hcl2)={dir(hcl2)}")
             parser_mod = getattr(hcl2, "parser", None) or sys.modules.get("hcl2.parser")
-            errors.append(f"parser_mod={parser_mod}")
             if parser_mod is not None:
-                errors.append(f"dir(parser_mod)={dir(parser_mod)}")
+                # Direct check 1: parser_mod.parser attribute
+                p = getattr(parser_mod, "parser", None)
+                if p is not None:
+                    if hasattr(p, "parse") and (hasattr(p, "options") or hasattr(p, "rules")):
+                        return p
+                    lark_p = getattr(p, "lark_parser", None) or getattr(p, "parser", None)
+                    if lark_p is not None and hasattr(lark_p, "parse"):
+                        return lark_p
+
+                # Direct check 2: parser_mod.hcl2 instance attribute
                 hcl2_inst = getattr(parser_mod, "hcl2", None)
-                errors.append(f"hcl2_inst={hcl2_inst}")
                 if hcl2_inst is not None:
                     p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
-                    if p is not None:
+                    if p is not None and hasattr(p, "parse"):
                         return p
-                    errors.append(f"dir(hcl2_inst)={dir(hcl2_inst)}")
 
+                # Direct check 3: parser_mod.Hcl2 class attribute / instantiation
                 hcl2_cls = getattr(parser_mod, "Hcl2", None)
-                errors.append(f"hcl2_cls={hcl2_cls}")
                 if hcl2_cls is not None:
                     p = getattr(hcl2_cls, "lark_parser", None) or getattr(hcl2_cls, "parser", None)
-                    if p is not None:
+                    if p is not None and hasattr(p, "parse"):
                         return p
                     try:
                         inst = hcl2_cls()
                         p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
-                        if p is not None:
+                        if p is not None and hasattr(p, "parse"):
                             return p
-                        errors.append(f"inst instantiated, dir(inst)={dir(inst)}")
                     except Exception as e:
                         errors.append(f"hcl2_cls() failed: {e}")
 
+                # Direct check 4: LARK_GRAMMAR string
                 grammar = getattr(parser_mod, "LARK_GRAMMAR", None)
-                errors.append(f"grammar len={len(grammar) if grammar else None}")
                 if grammar is not None:
                     from lark import Lark
                     return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
+
+                # Direct check 5: PARSER_FILE grammar file
+                parser_file = getattr(parser_mod, "PARSER_FILE", None)
+                if parser_file is not None:
+                    try:
+                        with open(parser_file, "r", encoding="utf-8") as f:
+                            grammar_text = f.read()
+                        from lark import Lark
+                        return Lark(grammar=grammar_text, parser="lalr", propagate_positions=True, cache=True)
+                    except Exception as e:
+                        errors.append(f"PARSER_FILE load failed: {e}")
+
         except Exception as e:
             errors.append(f"Top-level hcl2 access failed: {e}")
 
-        # 2. Try importing hcl2.parser explicitly
+        # Fallback: Try explicit import of hcl2.parser
         try:
             import hcl2.parser
             p_mod = hcl2.parser
-            hcl2_inst = getattr(p_mod, "hcl2", None)
-            if hcl2_inst is not None:
-                p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
-                if p is not None:
-                    return p
-            grammar = getattr(p_mod, "LARK_GRAMMAR", None)
-            if grammar is not None:
+            p = getattr(p_mod, "parser", None)
+            if p is not None and hasattr(p, "parse"):
+                return p
+            parser_file = getattr(p_mod, "PARSER_FILE", None)
+            if parser_file is not None:
+                with open(parser_file, "r", encoding="utf-8") as f:
+                    grammar_text = f.read()
                 from lark import Lark
-                return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
+                return Lark(grammar=grammar_text, parser="lalr", propagate_positions=True, cache=True)
         except Exception as e:
             errors.append(f"Explicit import hcl2.parser failed: {e}")
 
