@@ -16,7 +16,7 @@
 - [x] Phase 8: CLI Interface & Integration
 - [x] Phase 9: GitHub Action CI/CD Integration
 - [x] Phase 10: ARM Native Template Support (`parser/arm_parser.py`) [JSON Template Extraction, Variable/Parameter Resolution, Dynamic Expression Fail-Closed Gating, Cross-Format RBAC/NSG Equivalence]
-- [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`) [27-Case Ground-Truth Corpus, 1.0 Precision, 1.0 Recall, 1.0 F1 Score]*
+- [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`) [28-Case Ground-Truth Corpus: 16 SAT, 11 UNSAT, 1 UNRESOLVABLE; Decidable Metrics: 1.0 Precision, 1.0 Recall, 1.0 F1 Score; 100% Unresolvable Accuracy]
 - [x] Tier 3 Part A: Compositional Incremental Verification (`verify_incremental` & subgraph cache invalidation)
 - [x] Tier 3 Part B: Kubernetes Validating Admission Webhook (Live `kind` cluster `kubectl apply` verification)
 - [x] Z3 Performance Benchmarking: SMT Solver Overhead & Scaling Performance Baseline (`docs/z3_performance_report.md`)

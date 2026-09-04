@@ -269,5 +269,15 @@
     "format": "HCL",
     "expected_engine_state": "UNSAT",
     "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case28",
+    "file": "fixtures/phase11/azure_corpus/case28_policy_dynamic_unresolvable.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNRESOLVABLE",
+    "ambiguity": { "is_ambiguous": false }
   }
 ]

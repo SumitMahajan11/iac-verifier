@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "policy_location_eastus",
+      "properties": {
+        "policyRule": {
+          "if": {
+            "not": {
+              "field": "location",
+              "equals": "eastus"
+            }
+          },
+          "then": {
+            "effect": "Deny"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2021-06-01",
+      "name": "assign_location_policy",
+      "properties": {
+        "policyDefinitionId": "[resourceId('Microsoft.Authorization/policyDefinitions', 'policy_location_eastus')]",
+        "scope": "/subscriptions/00000000-0000-0000-0000-000000000000"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "stg_unresolvable_dyn",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2"
+    }
+  ]
+}

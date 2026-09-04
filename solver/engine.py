@@ -490,25 +490,25 @@ class VerificationEngine:
 
         for assign in policy_assignments:
             pol_def_id = assign.attributes.get("policy_definition_id")
+            pol_def_str = str(pol_def_id) if pol_def_id is not None else ""
             if isinstance(pol_def_id, ResourceReference):
-                pol_def_target = pol_def_id.target_address
+                pol_def_str += " " + pol_def_id.target_address
             elif isinstance(pol_def_id, Unresolved):
-                pol_def_target = getattr(pol_def_id, "expression", str(pol_def_id))
-            else:
-                pol_def_target = str(pol_def_id) if pol_def_id else ""
+                pol_def_str += " " + getattr(pol_def_id, "expression", "") + " " + getattr(pol_def_id, "reason", "")
 
             policy_def = None
-            if pol_def_target:
-                for r in graph.resources.values():
-                    if "policy_definition" in r.type.lower() or "policydefinitions" in r.type.lower():
-                        if (
-                            r.address in pol_def_target
-                            or r.address == pol_def_target
-                            or (r.attributes.get("name") and r.attributes.get("name") in pol_def_target)
-                            or str(pol_def_target).endswith(r.address.split(".")[-1])
-                        ):
-                            policy_def = r
-                            break
+            for r in graph.resources.values():
+                if "policy_definition" in r.type.lower() or "policydefinitions" in r.type.lower():
+                    res_leaf = r.address.split("/")[-1].split(".")[-1]
+                    res_name = r.attributes.get("name")
+                    if (
+                        r.address in pol_def_str
+                        or r.address == pol_def_str
+                        or (res_name and str(res_name) in pol_def_str)
+                        or (res_leaf and res_leaf in pol_def_str)
+                    ):
+                        policy_def = r
+                        break
 
             if policy_def is None:
                 continue

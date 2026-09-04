@@ -40,14 +40,14 @@ def test_encode_policy_condition_equals():
 
     # location == eastus
     cond = {"field": "location", "equals": "eastus"}
-    expr = encoder.encode_policy_condition(cond, res)
+    expr, _ = encoder.encode_policy_condition(cond, res)
     solver = z3.Solver()
     solver.add(expr)
     assert solver.check() == z3.sat
 
     # location == westeurope
     cond_diff = {"field": "location", "equals": "westeurope"}
-    expr_diff = encoder.encode_policy_condition(cond_diff, res)
+    expr_diff, _ = encoder.encode_policy_condition(cond_diff, res)
     solver_diff = z3.Solver()
     solver_diff.add(expr_diff)
     assert solver_diff.check() == z3.unsat
@@ -63,14 +63,14 @@ def test_encode_policy_condition_in_notin():
 
     # location notIn ["westeurope", "northeurope"]
     cond = {"field": "location", "notIn": ["westeurope", "northeurope"]}
-    expr = encoder.encode_policy_condition(cond, res)
+    expr, _ = encoder.encode_policy_condition(cond, res)
     solver = z3.Solver()
     solver.add(expr)
     assert solver.check() == z3.sat
 
     # location in ["westeurope", "northeurope"]
     cond_in = {"field": "location", "in": ["westeurope", "northeurope"]}
-    expr_in = encoder.encode_policy_condition(cond_in, res)
+    expr_in, _ = encoder.encode_policy_condition(cond_in, res)
     solver_in = z3.Solver()
     solver_in.add(expr_in)
     assert solver_in.check() == z3.unsat
@@ -96,7 +96,7 @@ def test_encode_policy_condition_allof_anyof_not():
             {"field": "source_address_prefix", "equals": "*"},
         ]
     }
-    expr = encoder.encode_policy_condition(cond, res)
+    expr, _ = encoder.encode_policy_condition(cond, res)
     solver = z3.Solver()
     solver.add(expr)
     assert solver.check() == z3.sat

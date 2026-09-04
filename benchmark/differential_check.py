@@ -56,7 +56,23 @@ def run_differential_check(test_cases: List[Dict[str, Any]]) -> Tuple[bool, List
             
             if vulnerability_class in ("AZURE_NSG_EXPOSURE", "AZURE_RBAC_ESCALATION", "AZURE_GOVERNANCE_POLICY_VIOLATION"):
                 eval_results = engine.verify_graph(graph)
-                actual_state = "SAT" if any(r.status == "SAT" for r in eval_results) else "UNSAT"
+                pattern_map = {
+                    "AZURE_NSG_EXPOSURE": "NSG_OVER_EXPOSURE",
+                    "AZURE_RBAC_ESCALATION": "PRIVILEGE_ESCALATION_REACHABILITY",
+                    "AZURE_GOVERNANCE_POLICY_VIOLATION": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+                }
+                target_pat = pattern_map.get(vulnerability_class, vulnerability_class)
+                matching = [r for r in eval_results if r.pattern == target_pat]
+                if not matching:
+                    matching = eval_results
+
+                if any(r.status == "SAT" for r in matching):
+                    actual_state = "SAT"
+                elif any(r.status == "UNRESOLVABLE" for r in matching):
+                    actual_state = "UNRESOLVABLE"
+                else:
+                    actual_state = "UNSAT"
+
                 if actual_state != expected_state:
                     errors.append(f"[Azure Differential Mismatch] {file_path}: expected {expected_state}, got {actual_state}")
                 continue

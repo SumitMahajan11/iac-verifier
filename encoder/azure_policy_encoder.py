@@ -77,41 +77,45 @@ class AzurePolicyEncoder:
         self,
         cond_dict: Dict[str, Any],
         target_resource: Resource,
-    ) -> z3.BoolRef:
+    ) -> Tuple[z3.BoolRef, List[str]]:
         """
-        Recursively translates an Azure Policy 'if' condition dictionary into a Z3 BoolRef expression.
+        Recursively translates an Azure Policy 'if' condition dictionary into a Z3 BoolRef expression and unresolvable reasons.
         Supports: allOf, anyOf, not, field (equals, notEquals, in, notIn, contains, exists).
         """
         if not isinstance(cond_dict, dict):
-            return z3.BoolVal(False)
+            return z3.BoolVal(False), []
 
         # 1. allOf
         if "allOf" in cond_dict:
             all_of_list = cond_dict["allOf"]
             if isinstance(all_of_list, list) and all_of_list:
-                sub_exprs = [
-                    self.encode_policy_condition(c, target_resource)
-                    for c in all_of_list
-                ]
-                return z3.And(sub_exprs)
-            return z3.BoolVal(True)
+                sub_exprs = []
+                reasons = []
+                for c in all_of_list:
+                    expr, errs = self.encode_policy_condition(c, target_resource)
+                    sub_exprs.append(expr)
+                    reasons.extend(errs)
+                return z3.And(sub_exprs), reasons
+            return z3.BoolVal(True), []
 
         # 2. anyOf
         if "anyOf" in cond_dict:
             any_of_list = cond_dict["anyOf"]
             if isinstance(any_of_list, list) and any_of_list:
-                sub_exprs = [
-                    self.encode_policy_condition(c, target_resource)
-                    for c in any_of_list
-                ]
-                return z3.Or(sub_exprs)
-            return z3.BoolVal(False)
+                sub_exprs = []
+                reasons = []
+                for c in any_of_list:
+                    expr, errs = self.encode_policy_condition(c, target_resource)
+                    sub_exprs.append(expr)
+                    reasons.extend(errs)
+                return z3.Or(sub_exprs), reasons
+            return z3.BoolVal(False), []
 
         # 3. not
         if "not" in cond_dict:
             not_cond = cond_dict["not"]
-            sub_expr = self.encode_policy_condition(not_cond, target_resource)
-            return z3.Not(sub_expr)
+            sub_expr, errs = self.encode_policy_condition(not_cond, target_resource)
+            return z3.Not(sub_expr), errs
 
         # 4. field condition
         if "field" in cond_dict:
@@ -119,59 +123,59 @@ class AzurePolicyEncoder:
             val = _resolve_attribute_val(target_resource, field_name)
 
             if isinstance(val, Unresolved):
-                return z3.BoolVal(True)
+                return z3.BoolVal(False), [f"Unresolved dynamic attribute '{field_name}': {val.reason}"]
 
             # Check operators
             if "equals" in cond_dict:
                 target_val = cond_dict["equals"]
                 if val is None:
-                    return z3.BoolVal(False)
+                    return z3.BoolVal(False), []
                 eq = str(val).strip().lower() == str(target_val).strip().lower()
-                return z3.BoolVal(eq)
+                return z3.BoolVal(eq), []
 
             if "notEquals" in cond_dict or "not_equals" in cond_dict:
                 target_val = cond_dict.get("notEquals") or cond_dict.get("not_equals")
                 if val is None:
-                    return z3.BoolVal(True)
+                    return z3.BoolVal(True), []
                 neq = str(val).strip().lower() != str(target_val).strip().lower()
-                return z3.BoolVal(neq)
+                return z3.BoolVal(neq), []
 
             if "in" in cond_dict:
                 target_list = cond_dict["in"]
                 if not isinstance(target_list, list):
                     target_list = [target_list]
                 if val is None:
-                    return z3.BoolVal(False)
+                    return z3.BoolVal(False), []
                 val_str = str(val).strip().lower()
                 in_list = any(val_str == str(x).strip().lower() for x in target_list)
-                return z3.BoolVal(in_list)
+                return z3.BoolVal(in_list), []
 
             if "notIn" in cond_dict or "not_in" in cond_dict:
                 target_list = cond_dict.get("notIn") or cond_dict.get("not_in")
                 if not isinstance(target_list, list):
                     target_list = [target_list]
                 if val is None:
-                    return z3.BoolVal(True)
+                    return z3.BoolVal(True), []
                 val_str = str(val).strip().lower()
                 in_list = any(val_str == str(x).strip().lower() for x in target_list)
-                return z3.BoolVal(not in_list)
+                return z3.BoolVal(not in_list), []
 
             if "contains" in cond_dict:
                 target_substr = str(cond_dict["contains"]).strip().lower()
                 if val is None:
-                    return z3.BoolVal(False)
+                    return z3.BoolVal(False), []
                 if isinstance(val, list):
                     val_contains = any(target_substr in str(item).strip().lower() for item in val)
                 else:
                     val_contains = target_substr in str(val).strip().lower()
-                return z3.BoolVal(val_contains)
+                return z3.BoolVal(val_contains), []
 
             if "exists" in cond_dict:
                 should_exist = bool(cond_dict["exists"])
                 exists = val is not None
-                return z3.BoolVal(exists == should_exist)
+                return z3.BoolVal(exists == should_exist), []
 
-        return z3.BoolVal(False)
+        return z3.BoolVal(False), []
 
     def encode_policy_violation(
         self,
@@ -247,7 +251,10 @@ class AzurePolicyEncoder:
 
         # 4. Encode IF Condition
         if_cond = policy_rule.get("if", {})
-        cond_expr = self.encode_policy_condition(if_cond, target_resource)
+        cond_expr, cond_errs = self.encode_policy_condition(if_cond, target_resource)
+
+        if cond_errs:
+            return z3.BoolVal(False), f"Unresolved dynamic policy expression: {'; '.join(cond_errs)}"
 
         violation_expr = z3.And(z3.BoolVal(applicable), cond_expr)
         return violation_expr, None

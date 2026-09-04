@@ -95,13 +95,13 @@ To provide a credible, verifiable precision/recall claim (target: 1.0 precision,
 
 ##### Category Breakdown & Case Allocation
 
-| Category | # Cases | Focus Areas / Vulnerability Patterns | Formats Covered | Expected SMT States |
+| Category | # Cases | Focus Areas / Vulnerability Patterns | Formats Covered | Expected Engine States |
 | :--- | :---: | :--- | :--- | :--- |
-| **1. NSG Over-Exposure** | **8** | Open sensitive ports (SSH 22, RDP 3389, SMB 445, FTP 21, Telnet 23) from `*` or `Internet` to private subnets; priority collisions (high priority allow overriding low priority deny); range/wildcard array ports (`3380-3390`, `*`). | HCL & ARM JSON | 4 SAT, 3 UNSAT, 1 UNRESOLVABLE |
-| **2. RBAC Privilege Escalation** | **8** | Custom role definition with `Microsoft.Authorization/*/write` or `*` actions; managed identity (VM / Web App / Function App) with `Owner`/`Contributor` assignment; Active Directory group fail-closed trapping (`azuread_group`); multi-hop workload escalation. | HCL & ARM JSON | 4 SAT, 3 UNSAT, 1 UNRESOLVABLE |
-| **3. Scope Inheritance & Isolation** | **6** | Management Group root scope (`/providers/Microsoft.Management/managementGroups/mg-root`) subsuming underlying subscriptions/workloads; subscription isolation (`/subscriptions/sub-prod-001` vs `/subscriptions/sub-dev-002`); Resource Group scope isolation (`rg-finance` vs `rg-analytics`). | HCL & ARM JSON | 3 SAT, 3 UNSAT |
-| **4. Azure Policy Guardrails** | **5** | Azure Policy `Deny` enforcement (missing NSG subnet attachment, public IP creation, unauthorized location/SKU); Management Group policy inheritance down to resource group scopes; policy exemptions handling. | HCL & ARM JSON | 3 SAT, 2 UNSAT |
-| **TOTAL** | **27** | **Rigorous, multi-format Azure security verification suite** | **HCL (14) / ARM (13)** | **14 SAT, 11 UNSAT, 2 UNRESOLVABLE** |
+| **1. NSG Over-Exposure** | **7** | Open sensitive ports (SSH 22, RDP 3389, DB 5432, multi-port) from `*` or `Internet` to private subnets; priority shadowing (`100 Deny` vs `200 Allow`); VNet/Subnet bound safe configurations. | HCL & ARM JSON | 4 SAT, 3 UNSAT |
+| **2. RBAC Privilege Escalation** | **7** | Custom role definition with `Microsoft.Authorization/*/write` or `*` actions; managed identity (VM / Web App) with `Owner`/`Contributor` assignment; User Access Administrator; cross-subscription role assignment. | HCL & ARM JSON | 5 SAT, 2 UNSAT |
+| **3. Scope Inheritance & Isolation** | **6** | Management Group root scope (`mg-root`) subsuming underlying subscriptions/workloads; subscription inheritance; Resource Group scope isolation (`rg-finance` vs `rg-analytics`); unassigned policy isolation. | HCL & ARM JSON | 3 SAT, 3 UNSAT |
+| **4. Azure Policy Guardrails** | **8** | Azure Policy `Deny` enforcement (Public IP restriction, unauthorized location/SKU, HTTPS enforcement, nested `allOf`/`anyOf`); Audit effect safe handling; compliant locations; dynamic expression fail-closed `UNRESOLVABLE` handling (`resourceGroup().location`). | HCL & ARM JSON | 4 SAT, 3 UNSAT, 1 UNRESOLVABLE |
+| **TOTAL** | **28** | **Rigorous, multi-format Azure security verification suite** | **HCL (15) / ARM (13)** | **16 SAT, 11 UNSAT, 1 UNRESOLVABLE** |
 
 ##### Ground-Truth Case Schema Specification (`benchmark/azure_ground_truth.json`)
 

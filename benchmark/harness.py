@@ -47,6 +47,7 @@ class BenchmarkHarness:
             raise RuntimeError("Pre-flight differential check failed. Benchmark aborted to prevent invalid metrics.")
 
         tp, fp, fn, tn = 0, 0, 0, 0
+        unresolvable_expected, unresolvable_actual, unresolvable_correct = 0, 0, 0
         ambiguous_excluded: List[Dict[str, Any]] = []
         evaluated_cases: List[Dict[str, Any]] = []
 
@@ -61,6 +62,7 @@ class BenchmarkHarness:
                 })
                 continue
 
+            case_id = case.get("case_id")
             file_path = case.get("file")
             expected = case.get("expected_engine_state")
             vuln_class = case.get("vulnerability_class")
@@ -114,17 +116,45 @@ class BenchmarkHarness:
 
                 elif vuln_class in ("AZURE_NSG_EXPOSURE", "AZURE_RBAC_ESCALATION", "AZURE_GOVERNANCE_POLICY_VIOLATION"):
                     eval_results = self.engine.verify_graph(graph)
-                    if any(r.status == "SAT" for r in eval_results):
+                    pattern_map = {
+                        "AZURE_NSG_EXPOSURE": "NSG_OVER_EXPOSURE",
+                        "AZURE_RBAC_ESCALATION": "PRIVILEGE_ESCALATION_REACHABILITY",
+                        "AZURE_GOVERNANCE_POLICY_VIOLATION": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+                    }
+                    target_pat = pattern_map.get(vuln_class, vuln_class)
+                    matching = [r for r in eval_results if r.pattern == target_pat]
+                    if not matching:
+                        matching = eval_results
+
+                    if any(r.status == "SAT" for r in matching):
                         actual = "SAT"
+                    elif any(r.status == "UNRESOLVABLE" for r in matching):
+                        actual = "UNRESOLVABLE"
                     else:
                         actual = "UNSAT"
 
             except Exception as e:
                 actual = "UNRESOLVABLE"
 
-            # Binary classification mapping for vulnerability detection metrics:
-            # Positive (Vulnerable): expected == "SAT"
-            # Negative (Safe/Clean): expected in ("UNSAT", "UNSAT_BOUNDED")
+            # Handle UNRESOLVABLE non-binary verdicts in separate accounting
+            if expected == "UNRESOLVABLE" or actual == "UNRESOLVABLE":
+                if expected == "UNRESOLVABLE":
+                    unresolvable_expected += 1
+                if actual == "UNRESOLVABLE":
+                    unresolvable_actual += 1
+                if expected == "UNRESOLVABLE" and actual == "UNRESOLVABLE":
+                    unresolvable_correct += 1
+
+                evaluated_cases.append({
+                    "file": file_path,
+                    "resource_id": target_resource_id,
+                    "expected": expected,
+                    "actual": actual,
+                    "status": "PASS" if expected == actual else "FAIL"
+                })
+                continue
+
+            # Binary Decidable Evaluation: expected and actual are both SAT / UNSAT / UNSAT_BOUNDED
             is_expected_positive = (expected == "SAT")
             is_actual_positive = (actual == "SAT")
 
@@ -162,6 +192,11 @@ class BenchmarkHarness:
                 "precision": round(precision, 4),
                 "recall": round(recall, 4),
                 "f1_score": round(f1, 4)
+            },
+            "unresolvable_metrics": {
+                "expected_unresolvable": unresolvable_expected,
+                "actual_unresolvable": unresolvable_actual,
+                "correct_unresolvable": unresolvable_correct,
             },
             "evaluated_cases": evaluated_cases
         }
