@@ -65,104 +65,124 @@ class ASTRepairEngine:
     Format-preserving HCL auto-repair engine based on Lark CST source span metadata.
     """
 
+    HCL2_GRAMMAR = r"""
+start : _NEW_LINE_OR_COMMENT* body _NEW_LINE_OR_COMMENT?
+body : (attribute | block _NEW_LINE_OR_COMMENT+ )*
+attribute : (identifier) "=" expression _NEW_LINE_OR_COMMENT*
+block : identifier (identifier | STRING_LIT)* "{" _NEW_LINE_OR_COMMENT* body "}"
+
+_NEW_LINE_OR_COMMENT: ( /\r?\n/ | /#.*\n/ | /\/\/.*\n/ )+
+
+identifier : /[a-zA-Z_][a-zA-Z0-9_-]*/
+
+?expression : expr_term _NEW_LINE_OR_COMMENT* | operation | conditional
+
+conditional : expression "?" _NEW_LINE_OR_COMMENT* expression _NEW_LINE_OR_COMMENT* ":" _NEW_LINE_OR_COMMENT* expression _NEW_LINE_OR_COMMENT?
+
+?operation : unary_op | binary_op
+!unary_op : ("-" | "!") expr_term
+binary_op : expression binary_term
+!binary_operator : "==" | "!=" | "<" | ">" | "<=" | ">=" | "-" | "*" | "/" | "%" | "&&" | "||" | "+"
+binary_term : binary_operator _NEW_LINE_OR_COMMENT* expression
+
+expr_term : "(" _NEW_LINE_OR_COMMENT* expression _NEW_LINE_OR_COMMENT? ")"
+            | float_lit
+            | int_lit
+            | STRING_LIT
+            | tuple
+            | object
+            | function_call
+            | index_expr_term
+            | get_attr_expr_term
+            | identifier
+            | provider_function_call
+            | heredoc_template
+            | heredoc_template_trim
+            | attr_splat_expr_term
+            | full_splat_expr_term
+            | for_tuple_expr
+            | for_object_expr
+
+
+STRING_LIT : "\"" (STRING_CHARS | INTERPOLATION)* "\""
+STRING_CHARS : /(?:(?!\${)([^"\\]|\\.))+/+
+NESTED_INTERPOLATION : "${" /[^}]+/ "}"
+NESTED_QUOTES : "\"" /[^"]*/ "\""
+INTERPOLATION : "${" (/(?:(?!\${)([^}"]))+/ | NESTED_QUOTES | NESTED_INTERPOLATION)+ "}"
+
+int_lit : DECIMAL+
+!float_lit: DECIMAL+ "." DECIMAL+ (EXP_MARK DECIMAL+)?
+            | DECIMAL+ ("." DECIMAL+)? EXP_MARK DECIMAL+
+DECIMAL : "0".."9"
+EXP_MARK : ("e" | "E") ("+" | "-")?
+
+tuple : "[" (_NEW_LINE_OR_COMMENT* expression (_NEW_LINE_OR_COMMENT* "," _NEW_LINE_OR_COMMENT* expression)* ","? _NEW_LINE_OR_COMMENT*)? _NEW_LINE_OR_COMMENT? "]" | "[" _NEW_LINE_OR_COMMENT* "]"
+object : "{" _NEW_LINE_OR_COMMENT* (object_elem (","? _NEW_LINE_OR_COMMENT* object_elem )* ","? _NEW_LINE_OR_COMMENT*)* "}"
+object_elem : (identifier | expression) ("=" | ":")? expression
+
+heredoc_template : /<<(?P<heredoc>[a-zA-Z][a-zA-Z0-9._-]+)\n(?:.|\n)+?\n+\s*(?P=heredoc)/
+heredoc_template_trim : /<<-(?P<heredoc_trim>[a-zA-Z][a-zA-Z0-9._-]+)\n(?:.|\n)+?\n+\s*(?P=heredoc_trim)/
+
+function_call : identifier "(" _NEW_LINE_OR_COMMENT* arguments? _NEW_LINE_OR_COMMENT? ")"
+arguments : (expression (_NEW_LINE_OR_COMMENT* "," _NEW_LINE_OR_COMMENT*  expression)* ("," | "...")? _NEW_LINE_OR_COMMENT*)
+
+colons: "::"
+provider_function_call: identifier colons identifier colons  identifier  "(" _NEW_LINE_OR_COMMENT? arguments? _NEW_LINE_OR_COMMENT? ")"
+index_expr_term : expr_term index
+get_attr_expr_term : expr_term get_attr
+attr_splat_expr_term : expr_term attr_splat
+full_splat_expr_term : expr_term full_splat
+index : "[" _NEW_LINE_OR_COMMENT? expression _NEW_LINE_OR_COMMENT? "]" | "." DECIMAL+
+get_attr : "." identifier
+attr_splat : ".*" (get_attr | index)*
+full_splat : "[*]" (get_attr | index)*
+
+!for_tuple_expr : "[" _NEW_LINE_OR_COMMENT* for_intro _NEW_LINE_OR_COMMENT? expression _NEW_LINE_OR_COMMENT* (for_cond _NEW_LINE_OR_COMMENT*)? "]"
+!for_object_expr : "{" _NEW_LINE_OR_COMMENT* for_intro expression "=>" _NEW_LINE_OR_COMMENT* expression "..."? _NEW_LINE_OR_COMMENT* (for_cond _NEW_LINE_OR_COMMENT*)? "}"
+!for_intro : "for" _NEW_LINE_OR_COMMENT? identifier ("," identifier _NEW_LINE_OR_COMMENT?)? _NEW_LINE_OR_COMMENT? "in" _NEW_LINE_OR_COMMENT? expression ":" _NEW_LINE_OR_COMMENT?
+!for_cond : "if" _NEW_LINE_OR_COMMENT? expression
+
+%ignore /[ \t]+/
+%ignore /\/\*(.|\n)*?\*\//
+"""
+
     @staticmethod
     def _get_lark_parser():
         import sys
-        errors = []
+        from lark import Lark
 
+        # 1. Check if hcl2 exposes a pre-configured Lark parser instance
         try:
             import hcl2
-            parser_mod = getattr(hcl2, "parser", None) or sys.modules.get("hcl2.parser")
-            if parser_mod is not None:
-                # Direct check 1: parser_mod.parser attribute
-                p = getattr(parser_mod, "parser", None)
-                if p is not None:
-                    if hasattr(p, "parse") and (hasattr(p, "options") or hasattr(p, "rules")):
-                        return p
-                    lark_p = getattr(p, "lark_parser", None) or getattr(p, "parser", None)
+            for mod in [hcl2, getattr(hcl2, "parser", None), sys.modules.get("hcl2.parser")]:
+                if mod is None:
+                    continue
+                for attr in ["hcl2", "parser", "Hcl2", "hcl2_parser"]:
+                    val = getattr(mod, attr, None)
+                    if val is None:
+                        continue
+                    if hasattr(val, "parse") and (hasattr(val, "options") or hasattr(val, "grammar") or hasattr(val, "rules")):
+                        return val
+                    lark_p = getattr(val, "lark_parser", None) or getattr(val, "parser", None)
                     if lark_p is not None and hasattr(lark_p, "parse"):
                         return lark_p
+        except Exception:
+            pass
 
-                # Direct check 2: parser_mod.hcl2 instance attribute
-                hcl2_inst = getattr(parser_mod, "hcl2", None)
-                if hcl2_inst is not None:
-                    p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
-                    if p is not None and hasattr(p, "parse"):
-                        return p
-
-                # Direct check 3: parser_mod.Hcl2 class attribute / instantiation
-                hcl2_cls = getattr(parser_mod, "Hcl2", None)
-                if hcl2_cls is not None:
-                    p = getattr(hcl2_cls, "lark_parser", None) or getattr(hcl2_cls, "parser", None)
-                    if p is not None and hasattr(p, "parse"):
-                        return p
-                    try:
-                        inst = hcl2_cls()
-                        p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
-                        if p is not None and hasattr(p, "parse"):
-                            return p
-                    except Exception as e:
-                        errors.append(f"hcl2_cls() failed: {e}")
-
-                # Direct check 4: LARK_GRAMMAR string
-                grammar = getattr(parser_mod, "LARK_GRAMMAR", None)
-                if grammar is not None:
-                    from lark import Lark
-                    return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
-
-                # Direct check 5: PARSER_FILE grammar file via Lark.open
-                parser_file = getattr(parser_mod, "PARSER_FILE", None)
-                if parser_file is not None:
-                    try:
-                        from lark import Lark
-                        rel_file = getattr(parser_mod, "__file__", None)
-                        if rel_file:
-                            p = Lark.open(parser_file, rel_to=rel_file, parser="lalr", propagate_positions=True)
-                        else:
-                            p = Lark.open(parser_file, parser="lalr", propagate_positions=True)
-                        if hasattr(p, "parse"):
-                            return p
-                    except Exception as e:
-                        errors.append(f"Lark.open PARSER_FILE failed: {e}")
-
-                    try:
-                        from lark import Lark
-                        with open(parser_file, "rb") as f:
-                            p = Lark.load(f)
-                        if hasattr(p, "parse"):
-                            return p
-                    except Exception as e:
-                        errors.append(f"Lark.load open rb PARSER_FILE failed: {e}")
-
-                    try:
-                        with open(parser_file, "r", encoding="utf-8", errors="ignore") as f:
-                            grammar_text = f.read()
-                        from lark import Lark
-                        return Lark(grammar=grammar_text, parser="lalr", propagate_positions=True, cache=True)
-                    except Exception as e:
-                        errors.append(f"Text read PARSER_FILE failed: {e}")
-
-        except Exception as e:
-            errors.append(f"Top-level hcl2 access failed: {e}")
-
-        # Fallback: Try explicit import of hcl2.parser
+        # 2. Check if hcl2 exposes LARK_GRAMMAR string
         try:
-            import hcl2.parser
-            p_mod = hcl2.parser
-            p = getattr(p_mod, "parser", None)
-            if p is not None and hasattr(p, "parse"):
-                return p
-            parser_file = getattr(p_mod, "PARSER_FILE", None)
-            if parser_file is not None:
-                from lark import Lark
-                rel_file = getattr(p_mod, "__file__", None)
-                if rel_file:
-                    return Lark.open(parser_file, rel_to=rel_file, parser="lalr", propagate_positions=True)
-                return Lark.open(parser_file, parser="lalr", propagate_positions=True)
-        except Exception as e:
-            errors.append(f"Explicit import hcl2.parser failed: {e}")
+            import hcl2
+            for mod in [hcl2, getattr(hcl2, "parser", None), sys.modules.get("hcl2.parser")]:
+                if mod is None:
+                    continue
+                grammar = getattr(mod, "LARK_GRAMMAR", None)
+                if grammar and isinstance(grammar, str):
+                    return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
+        except Exception:
+            pass
 
-        raise RuntimeError(f"Unable to resolve Lark parser from hcl2 package; details: {' | '.join(errors)}")
+        # 3. Fallback: Build Lark parser from embedded HCL2 grammar
+        return Lark(grammar=ASTRepairEngine.HCL2_GRAMMAR, parser="lalr", propagate_positions=True, cache=True)
 
     @staticmethod
     def repair_hcl(
