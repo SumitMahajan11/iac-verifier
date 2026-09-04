@@ -30,6 +30,7 @@ from solver.engine import VerificationEngine
 # 1. encoder/sg_encoder.py (lines 63, 70, 80, 87)
 def test_sg_encoder_unresolved_rule_source():
     """Line 63: Unresolved object directly in rule_sources."""
+    assert False, "INTENTIONAL CI NEGATIVE CONTROL TEST FAILURE"
     res = Resource(
         address="aws_security_group.test_sg",
         type="aws_security_group",
