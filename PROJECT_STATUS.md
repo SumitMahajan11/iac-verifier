@@ -1,8 +1,8 @@
 # IaC Verifier — Project Status
 
 ## Current Phase
-**Current Status:** Z3 Performance Benchmarks & Scaling Telemetry Verified (195 Tests Passing)
-**Next Planned Phase:** Azure Multi-Cloud Benchmark Corpus Expansion & Azure Governance Rule Set Integration
+**Current Status:** Phase 11 Azure Governance Benchmark & Policy Encoder Verified (206 Tests Passing, 1.0 Precision/Recall)
+**Next Planned Phase:** Multi-Cloud GCP Provider Integration & Policy Synthesis Engine
 
 ## Exit Criteria Status
 - [x] Phase 0: Project Scaffolding & Repository Governance Structure
@@ -16,14 +16,17 @@
 - [x] Phase 8: CLI Interface & Integration
 - [x] Phase 9: GitHub Action CI/CD Integration
 - [x] Phase 10: ARM Native Template Support (`parser/arm_parser.py`) [JSON Template Extraction, Variable/Parameter Resolution, Dynamic Expression Fail-Closed Gating, Cross-Format RBAC/NSG Equivalence]
+- [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`) [27-Case Ground-Truth Corpus, 1.0 Precision, 1.0 Recall, 1.0 F1 Score]*
 - [x] Tier 3 Part A: Compositional Incremental Verification (`verify_incremental` & subgraph cache invalidation)
 - [x] Tier 3 Part B: Kubernetes Validating Admission Webhook (Live `kind` cluster `kubectl apply` verification)
 - [x] Z3 Performance Benchmarking: SMT Solver Overhead & Scaling Performance Baseline (`docs/z3_performance_report.md`)
 
+*Note: Phase 11 precision and recall metrics reflect evaluation on an author-written synthetic ground-truth corpus designed for specification verification, distinct from third-party public benchmark suites (e.g. Terragoat/Sadcloud).
+
 ## Test Suite Status
-- **Pass Count:** 195 passed in ~4.7s
-- **Line Coverage:** 90% overall across 195 tests
-- **Verification Command:** `.\.venv\Scripts\python -m pytest --cov=. --cov-report=term-missing --cov-report=html`
+- **Pass Count:** 206 passed in ~6.8s
+- **Line Coverage:** 89% overall across 206 tests
+- **Verification Command:** `python -m pytest --cov=. --cov-report=term-missing`
 
 
 

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected": "UNSAT",
+    "description": "ARM storage account in westeurope fully complying with EU-only location policy"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "eu-location-policy",
+      "properties": {
+        "policyRule": {
+          "if": {
+            "field": "location",
+            "notIn": ["westeurope", "northeurope"]
+          },
+          "then": {
+            "effect": "Deny"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2021-06-01",
+      "name": "eu-location-assign",
+      "properties": {
+        "scope": "/subscriptions/sub-policy-6",
+        "policyDefinitionId": "eu-location-policy"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "stgcompliantwesteu",
+      "location": "westeurope",
+      "properties": {
+        "scope": "/subscriptions/sub-policy-6/resourceGroups/rg-prod"
+      }
+    }
+  ]
+}

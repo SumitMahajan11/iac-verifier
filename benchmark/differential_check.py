@@ -10,6 +10,8 @@ from typing import List, Dict, Any, Tuple
 from z3 import Solver, sat, unsat, unknown
 
 from parser.hcl_parser import parse_file, build_graph
+from parser.arm_parser import parse_arm_file
+from graph.azure_trust_graph import build_azure_trust_graph
 from parser.graph import ResourceGraph, Unresolved
 from parser.attachments import resolve_rule_attachments
 from parser.references import resolve_resource_references
@@ -42,16 +44,23 @@ def run_differential_check(test_cases: List[Dict[str, Any]]) -> Tuple[bool, List
             continue
             
         try:
-            try:
+            if file_path.endswith(".json"):
+                graph = parse_arm_file(file_path)
+                build_azure_trust_graph(graph)
+            else:
                 parsed = parse_file(file_path)
                 graph = build_graph(parsed)
-            except Exception as e:
-                errors.append(f"Parse error in {file_path}: {e}")
-                continue
-                    
-            graph = resolve_resource_references(graph)
-            graph = resolve_rule_attachments(graph)
+                graph = resolve_resource_references(graph)
+                graph = resolve_rule_attachments(graph)
+                build_azure_trust_graph(graph)
             
+            if vulnerability_class in ("AZURE_NSG_EXPOSURE", "AZURE_RBAC_ESCALATION", "AZURE_GOVERNANCE_POLICY_VIOLATION"):
+                eval_results = engine.verify_graph(graph)
+                actual_state = "SAT" if any(r.status == "SAT" for r in eval_results) else "UNSAT"
+                if actual_state != expected_state:
+                    errors.append(f"[Azure Differential Mismatch] {file_path}: expected {expected_state}, got {actual_state}")
+                continue
+
             if vulnerability_class == "SG_EXPOSURE":
                 sg_rules = [r for r in graph.resources.values() if r.type in ("aws_security_group", "aws_security_group_rule")]
                 if not sg_rules:

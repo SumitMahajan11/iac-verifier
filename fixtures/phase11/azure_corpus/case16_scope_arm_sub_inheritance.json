@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "SCOPE_INHERITANCE",
+    "format": "ARM",
+    "expected": "SAT",
+    "description": "ARM policy definition and assignment at subscription scope inherited down to resource group storage account"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "deny-non-eu-location",
+      "properties": {
+        "policyRule": {
+          "if": {
+            "field": "location",
+            "notIn": ["westeurope", "northeurope"]
+          },
+          "then": {
+            "effect": "Deny"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2021-06-01",
+      "name": "sub-location-assignment",
+      "properties": {
+        "scope": "/subscriptions/sub-200",
+        "policyDefinitionId": "deny-non-eu-location"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "stgbadlocation",
+      "location": "eastus",
+      "properties": {
+        "scope": "/subscriptions/sub-200/resourceGroups/rg-app"
+      }
+    }
+  ]
+}

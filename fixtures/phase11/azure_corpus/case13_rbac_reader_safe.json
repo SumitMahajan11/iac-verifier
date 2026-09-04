@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "format": "ARM",
+    "expected": "UNSAT",
+    "description": "ARM template assigning read-only Reader role with no privilege escalation capabilities"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2020-04-01-preview",
+      "name": "00000000-0000-0000-0000-000000000013",
+      "properties": {
+        "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+        "principalId": "user-principal-id-013",
+        "scope": "/subscriptions/sub-1"
+      }
+    }
+  ]
+}

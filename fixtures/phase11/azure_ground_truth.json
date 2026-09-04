@@ -1,0 +1,273 @@
+[
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case01",
+    "file": "fixtures/phase11/azure_corpus/case01_nsg_open_ssh.tf",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case02",
+    "file": "fixtures/phase11/azure_corpus/case02_nsg_open_rdp.json",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "ARM",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case03",
+    "file": "fixtures/phase11/azure_corpus/case03_nsg_open_db.tf",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case04",
+    "file": "fixtures/phase11/azure_corpus/case04_nsg_sensitive_multi_port.json",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "ARM",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case05",
+    "file": "fixtures/phase11/azure_corpus/case05_nsg_priority_shadowing.tf",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case06",
+    "file": "fixtures/phase11/azure_corpus/case06_nsg_vnet_bound_safe.json",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "ARM",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case07",
+    "file": "fixtures/phase11/azure_corpus/case07_nsg_restricted_subnet_safe.tf",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case08",
+    "file": "fixtures/phase11/azure_corpus/case08_rbac_owner_escalation.tf",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case09",
+    "file": "fixtures/phase11/azure_corpus/case09_rbac_user_access_admin.json",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "ARM",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case10",
+    "file": "fixtures/phase11/azure_corpus/case10_rbac_custom_role_write.tf",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case11",
+    "file": "fixtures/phase11/azure_corpus/case11_rbac_managed_identity_chain.json",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "ARM",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case12",
+    "file": "fixtures/phase11/azure_corpus/case12_rbac_cross_sub_escalation.tf",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case13",
+    "file": "fixtures/phase11/azure_corpus/case13_rbac_reader_safe.json",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "ARM",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case14",
+    "file": "fixtures/phase11/azure_corpus/case14_rbac_scoped_contributor_safe.tf",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case15",
+    "file": "fixtures/phase11/azure_corpus/case15_scope_mg_to_sub_inheritance.tf",
+    "category": "SCOPE_INHERITANCE",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case16",
+    "file": "fixtures/phase11/azure_corpus/case16_scope_arm_sub_inheritance.json",
+    "category": "SCOPE_INHERITANCE",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case17",
+    "file": "fixtures/phase11/azure_corpus/case17_scope_mismatch_isolation.tf",
+    "category": "SCOPE_INHERITANCE",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case18",
+    "file": "fixtures/phase11/azure_corpus/case18_scope_unassigned_policy_safe.json",
+    "category": "SCOPE_INHERITANCE",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case19",
+    "file": "fixtures/phase11/azure_corpus/case19_scope_root_mg_override.tf",
+    "category": "SCOPE_INHERITANCE",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case20",
+    "file": "fixtures/phase11/azure_corpus/case20_scope_rg_boundary_safe.json",
+    "category": "SCOPE_INHERITANCE",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case21",
+    "file": "fixtures/phase11/azure_corpus/case21_policy_deny_public_ip.tf",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case22",
+    "file": "fixtures/phase11/azure_corpus/case22_policy_location_restriction.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case23",
+    "file": "fixtures/phase11/azure_corpus/case23_policy_https_enforcement.tf",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case24",
+    "file": "fixtures/phase11/azure_corpus/case24_policy_nested_allof_anyof.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "ARM",
+    "expected_engine_state": "SAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case25",
+    "file": "fixtures/phase11/azure_corpus/case25_policy_audit_effect_safe.tf",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case26",
+    "file": "fixtures/phase11/azure_corpus/case26_policy_compliant_location_safe.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case27",
+    "file": "fixtures/phase11/azure_corpus/case27_policy_compliant_https_safe.tf",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false }
+  }
+]

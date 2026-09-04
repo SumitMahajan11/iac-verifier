@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "SCOPE_INHERITANCE",
+    "format": "ARM",
+    "expected": "UNSAT",
+    "description": "ARM template with a policy definition that is never assigned to any scope, resulting in no active violations"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "unassigned-deny-policy",
+      "properties": {
+        "policyRule": {
+          "if": {
+            "field": "location",
+            "equals": "eastus"
+          },
+          "then": {
+            "effect": "Deny"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "stgunassignedsafe",
+      "location": "eastus",
+      "properties": {
+        "scope": "/subscriptions/sub-300/resourceGroups/rg-test"
+      }
+    }
+  ]
+}

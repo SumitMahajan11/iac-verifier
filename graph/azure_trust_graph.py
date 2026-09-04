@@ -54,14 +54,33 @@ def _clean_str(val: Any) -> str:
     return str(val)
 
 
+AZURE_BUILTIN_ROLE_GUIDS = {
+    "8e3af657-a8ff-443c-a75c-2fe8c4bcb635": "owner",
+    "b24988ac-6180-42a0-ab88-20f7382dd24c": "contributor",
+    "18d50028-4b7d-4f3d-b86b-2d056041761f": "user access administrator",
+    "f58310d9-a9f6-439a-9e8d-f62e7b41a168": "role based access control administrator",
+    "acdd72a7-3385-48ef-bd42-f606fba81ae7": "virtual machine contributor",
+}
+
+
+def _normalize_role_name(role_def_val: Any) -> str:
+    if not isinstance(role_def_val, str):
+        return ""
+    clean = role_def_val.strip().strip('"\'').lower()
+    last_seg = clean.split("/")[-1]
+    if last_seg in AZURE_BUILTIN_ROLE_GUIDS:
+        return AZURE_BUILTIN_ROLE_GUIDS[last_seg]
+    return clean
+
+
 def is_azure_control_role(
     role_def_val: Any,
     role_definitions: Dict[str, Resource],
 ) -> bool:
     """Determines whether a role definition grants control over workload resources or identities."""
     if isinstance(role_def_val, str):
-        clean_name = role_def_val.strip().strip('"\'').lower()
-        if clean_name in AZURE_CONTROL_BUILTIN_ROLES:
+        norm_name = _normalize_role_name(role_def_val)
+        if norm_name in AZURE_CONTROL_BUILTIN_ROLES:
             return True
         if role_def_val in role_definitions:
             return _is_custom_role_admin(role_definitions[role_def_val])
@@ -80,8 +99,8 @@ def is_azure_high_priv_role(
 ) -> bool:
     """Determines whether a role definition grants high-privilege administrative access."""
     if isinstance(role_def_val, str):
-        clean_name = role_def_val.strip().strip('"\'').lower()
-        if clean_name in AZURE_HIGH_PRIV_BUILTIN_ROLES:
+        norm_name = _normalize_role_name(role_def_val)
+        if norm_name in AZURE_HIGH_PRIV_BUILTIN_ROLES:
             return True
         if role_def_val in role_definitions:
             return _is_custom_role_admin(role_definitions[role_def_val])
@@ -257,7 +276,7 @@ def is_scope_subsumed(
 
 def build_azure_trust_graph(
     resource_graph: ResourceGraph,
-    trust_graph: TrustGraph,
+    trust_graph: Optional[TrustGraph] = None,
 ) -> Set[str]:
     """
     Populates TrustGraph with Azure RBAC nodes and directed privilege escalation edges.
@@ -271,6 +290,9 @@ def build_azure_trust_graph(
     Returns:
         azure_target_roles: Set of principal node addresses holding administrative roles over a scope.
     """
+    if trust_graph is None:
+        trust_graph = TrustGraph()
+    resource_graph.trust_graph = trust_graph
     role_assignments: List[Tuple[str, Resource]] = []
     role_definitions: Dict[str, Resource] = {}
     identities: Dict[str, Resource] = {}
@@ -413,9 +435,20 @@ def build_azure_trust_graph(
             elif clean_p in trust_graph.nodes:
                 principal_node = clean_p
             else:
-                principal_node = f"account:{clean_p}"
-                trust_graph.nodes.add(principal_node)
-                trust_graph.external_entry_points.add(principal_node)
+                # Try matching clean_p against identity resource names or principal_id attributes
+                matched_id_addr = None
+                for id_addr, id_res in identities.items():
+                    id_name = id_res.attributes.get("name")
+                    id_pid = id_res.attributes.get("principal_id")
+                    if (id_name and id_name == clean_p) or (id_pid and id_pid == clean_p):
+                        matched_id_addr = id_res.address
+                        break
+                if matched_id_addr:
+                    principal_node = matched_id_addr
+                else:
+                    principal_node = clean_p if clean_p.startswith("account:") else f"account:{clean_p}"
+                    trust_graph.nodes.add(principal_node)
+                    trust_graph.external_entry_points.add(principal_node)
         else:
             trust_graph.unresolvable_roles.add(ra_addr)
             trust_graph.unresolvable_reasons.append(
@@ -428,11 +461,30 @@ def build_azure_trust_graph(
         is_control = is_azure_control_role(role_def, role_definitions)
         is_high_priv = is_azure_high_priv_role(role_def, role_definitions)
 
-        if is_high_priv and not principal_node.startswith("account:"):
-            azure_target_roles.add(principal_node)
-
         resolved_role_name = _resolve_role_def_name(role_def, role_definitions, resource_graph)
         resolved_scope_str = scope.target_address if isinstance(scope, ResourceReference) else _clean_str(scope)
+
+        if is_high_priv:
+            if principal_node.startswith("account:"):
+                # Only add ra_addr as a target role if no compute workloads with attached managed identities exist in the graph
+                if not compute_attached_identities:
+                    trust_graph.nodes.add(ra_addr)
+                    azure_target_roles.add(ra_addr)
+                    fake_stmt = IamPolicyStatement(
+                        effect="Allow",
+                        actions=[resolved_role_name],
+                        resources=[resolved_scope_str],
+                        principal=principal_node,
+                    )
+                    trust_graph.edges.append(
+                        TrustEdge(
+                            from_node=principal_node,
+                            to_node=ra_addr,
+                            trust_statement=fake_stmt,
+                        )
+                    )
+            else:
+                azure_target_roles.add(principal_node)
 
         # Create Directed Edges for identity assumption
         if scope:

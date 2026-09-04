@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected": "SAT",
+    "description": "ARM template nested policy with allOf containing anyOf conditions violated by non-compliant storage configuration"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "nested-compliance-policy",
+      "properties": {
+        "policyRule": {
+          "if": {
+            "allOf": [
+              {
+                "field": "accountTier",
+                "equals": "Standard"
+              },
+              {
+                "anyOf": [
+                  {
+                    "field": "location",
+                    "equals": "eastus"
+                  },
+                  {
+                    "field": "location",
+                    "equals": "westus"
+                  }
+                ]
+              }
+            ]
+          },
+          "then": {
+            "effect": "Deny"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2021-06-01",
+      "name": "nested-policy-assign",
+      "properties": {
+        "scope": "/subscriptions/sub-policy-4",
+        "policyDefinitionId": "nested-compliance-policy"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "stgnestedviolator",
+      "location": "eastus",
+      "properties": {
+        "scope": "/subscriptions/sub-policy-4/resourceGroups/rg-test",
+        "accountTier": "Standard"
+      }
+    }
+  ]
+}

@@ -41,6 +41,7 @@ from parser.graph import (
     Unresolved,
 )
 from encoder.azure_nsg_encoder import AzureNSGEncoder
+from encoder.azure_policy_encoder import AzurePolicyEncoder
 
 
 
@@ -76,7 +77,7 @@ def compute_cache_key(
 ) -> str:
     res_list = [resource_address]
     
-    if pattern == "PRIVILEGE_ESCALATION_REACHABILITY":
+    if pattern in ("PRIVILEGE_ESCALATION_REACHABILITY", "AZURE_GOVERNANCE_POLICY_VIOLATION"):
         res_list = sorted(list(graph.resources.keys()))
     else:
         deps = set([resource_address])
@@ -110,7 +111,8 @@ def compute_cache_key(
             state.append((addr, dataclasses.asdict(r)))
     
     data_str = json.dumps(state, default=_default_encoder, sort_keys=True)
-    return hashlib.sha256(data_str.encode("utf-8")).hexdigest()
+    key = hashlib.sha256(data_str.encode("utf-8")).hexdigest()
+    return key
 
 
 class VerificationCache:
@@ -234,6 +236,44 @@ class VerificationEngine:
                         self.cache.put(cache_key, res)
                 if res:
                     results.append(res)
+
+            # Check Pattern 4: Azure Governance Policy Violation
+            has_policy_assignments = any(
+                "policy_assignment" in r.type.lower() or "policyassignments" in r.type.lower()
+                for r in graph.resources.values()
+            )
+            is_policy_meta_resource = (
+                "policy_definition" in resource.type.lower()
+                or "policydefinitions" in resource.type.lower()
+                or "policy_assignment" in resource.type.lower()
+                or "policyassignments" in resource.type.lower()
+            )
+            if has_policy_assignments and not is_policy_meta_resource:
+                res = None
+                cache_key = None
+                if self.cache:
+                    cache_key = compute_cache_key(graph, address, "AZURE_GOVERNANCE_POLICY_VIOLATION")
+                    res = self.cache.get(cache_key)
+                if not res:
+                    res = self.verify_azure_policy(resource, graph, timeout_ms=eff_timeout)
+                    if res and self.cache and cache_key:
+                        self.cache.put(cache_key, res)
+                if res:
+                    results.append(res)
+
+        # Check Pattern 5: Privilege Escalation Reachability (AWS IAM & Azure RBAC)
+        if any(r.type in ("aws_iam_role", "azurerm_role_assignment") for r in graph.resources.values()) or getattr(graph, "trust_graph", None):
+            res = None
+            cache_key = None
+            if self.cache:
+                cache_key = compute_cache_key(graph, "graph", "PRIVILEGE_ESCALATION_REACHABILITY")
+                res = self.cache.get(cache_key)
+            if not res:
+                res = self.verify_privilege_escalation(graph, timeout_ms=eff_timeout)
+                if res and self.cache and cache_key:
+                    self.cache.put(cache_key, res)
+            if res:
+                results.append(res)
 
         return results
 
@@ -431,6 +471,98 @@ class VerificationEngine:
                 message=msg,
             )
 
+    def verify_azure_policy(
+        self,
+        resource: Resource,
+        graph: ResourceGraph,
+        timeout_ms: Optional[int] = None,
+    ) -> Optional[VerificationResult]:
+        policy_assignments = [
+            r
+            for r in graph.resources.values()
+            if "policy_assignment" in r.type.lower() or "policyassignments" in r.type.lower()
+        ]
+
+        if not policy_assignments:
+            return None
+
+        policy_encoder = AzurePolicyEncoder()
+
+        for assign in policy_assignments:
+            pol_def_id = assign.attributes.get("policy_definition_id")
+            if isinstance(pol_def_id, ResourceReference):
+                pol_def_target = pol_def_id.target_address
+            elif isinstance(pol_def_id, Unresolved):
+                pol_def_target = getattr(pol_def_id, "expression", str(pol_def_id))
+            else:
+                pol_def_target = str(pol_def_id) if pol_def_id else ""
+
+            policy_def = None
+            if pol_def_target:
+                for r in graph.resources.values():
+                    if "policy_definition" in r.type.lower() or "policydefinitions" in r.type.lower():
+                        if (
+                            r.address in pol_def_target
+                            or r.address == pol_def_target
+                            or (r.attributes.get("name") and r.attributes.get("name") in pol_def_target)
+                            or str(pol_def_target).endswith(r.address.split(".")[-1])
+                        ):
+                            policy_def = r
+                            break
+
+            if policy_def is None:
+                continue
+
+            violation_expr, err = policy_encoder.encode_policy_violation(policy_def, assign, resource, graph)
+
+            if err:
+                return VerificationResult(
+                    status="UNRESOLVABLE",
+                    resource_address=resource.address,
+                    pattern="AZURE_GOVERNANCE_POLICY_VIOLATION",
+                    message=f"Unable to evaluate Azure policy for {resource.address}: {err}",
+                )
+
+            solver = z3.Solver()
+            eff_timeout = timeout_ms or self.timeout_ms
+            solver.add(violation_expr)
+            check_res = self._check_solver_with_timeout(solver, eff_timeout)
+
+            if check_res == z3.sat:
+                policy_rule_attr = policy_def.attributes.get("policy_rule")
+                rule_dict = {}
+                if isinstance(policy_rule_attr, str):
+                    try:
+                        rule_dict = json.loads(policy_rule_attr)
+                    except Exception:
+                        pass
+                elif isinstance(policy_rule_attr, dict):
+                    rule_dict = policy_rule_attr
+
+                if_cond = rule_dict.get("if", {})
+
+                return VerificationResult(
+                    status="SAT",
+                    resource_address=resource.address,
+                    pattern="AZURE_GOVERNANCE_POLICY_VIOLATION",
+                    message=f"Resource '{resource.address}' violates Azure Governance Policy '{policy_def.address}' assigned at scope '{assign.attributes.get('scope')}'",
+                    witness={
+                        "target_resource": resource.address,
+                        "policy_definition": policy_def.address,
+                        "policy_assignment": assign.address,
+                        "scope": assign.attributes.get("scope"),
+                        "violating_condition": if_cond,
+                        "effect": "Deny",
+                    },
+                )
+
+        return VerificationResult(
+            status="UNSAT",
+            resource_address=resource.address,
+            pattern="AZURE_GOVERNANCE_POLICY_VIOLATION",
+            message=f"Resource '{resource.address}' complies with all assigned Azure Governance Policies",
+        )
+
     def verify_iam_policy(
         self, resource: Resource, timeout_ms: Optional[int] = None
     ) -> Optional[VerificationResult]:
@@ -532,7 +664,9 @@ class VerificationEngine:
         - UNKNOWN: Solver timeout or undecided.
         - UNRESOLVABLE: Unresolved trust data or unresolvable references in role policies.
         """
-        trust_graph = build_trust_graph(graph)
+        trust_graph = getattr(graph, "trust_graph", None)
+        if trust_graph is None or not trust_graph.nodes:
+            trust_graph = build_trust_graph(graph)
 
         cache_key = None
         if self.cache:

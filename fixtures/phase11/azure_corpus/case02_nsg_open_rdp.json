@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "NSG_OVER_EXPOSURE",
+    "format": "ARM",
+    "expected": "SAT",
+    "description": "ARM template NSG allowing inbound RDP (3389) from Internet"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2021-02-01",
+      "name": "nsg-open-rdp",
+      "location": "eastus",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowRDPInternet",
+            "properties": {
+              "priority": 110,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

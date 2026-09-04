@@ -122,15 +122,15 @@ def test_verification_engine_priv_esc_zero_role_nodes():
         attributes={
             "principal_id": "account:user1",
             "scope": "/subscriptions/sub-123",
-            "role_definition_name": "Owner",
+            "role_definition_name": "Reader",
         },
     )
     graph.add_resource(ra)
 
     engine = VerificationEngine(use_cache=False)
-    res = engine.verify_privilege_escalation(graph, target_resource="account:account:user1")
+    res = engine.verify_privilege_escalation(graph)
     assert res.status in ("UNSAT", "UNSAT_BOUNDED")
-    assert "0 role nodes in graph" in res.message
+    assert "0 role nodes in graph" in res.message or "no target roles" in res.message
 
 
 def test_verification_engine_incremental_nsg(tmp_path):

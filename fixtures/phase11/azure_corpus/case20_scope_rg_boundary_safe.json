@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "SCOPE_INHERITANCE",
+    "format": "ARM",
+    "expected": "UNSAT",
+    "description": "ARM template showing RG-1 policy assignment isolated from RG-2 storage account"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "apiVersion": "2021-06-01",
+      "name": "rg1-strict-policy",
+      "properties": {
+        "policyRule": {
+          "if": {
+            "field": "accountTier",
+            "equals": "Standard"
+          },
+          "then": {
+            "effect": "Deny"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2021-06-01",
+      "name": "rg1-assignment",
+      "properties": {
+        "scope": "/subscriptions/sub-400/resourceGroups/rg-1",
+        "policyDefinitionId": "rg1-strict-policy"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "stgrg2safe",
+      "location": "westeurope",
+      "properties": {
+        "scope": "/subscriptions/sub-400/resourceGroups/rg-2",
+        "accountTier": "Standard"
+      }
+    }
+  ]
+}

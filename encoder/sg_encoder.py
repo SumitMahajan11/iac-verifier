@@ -8,9 +8,9 @@ from encoder.cidr import (
     make_ip_in_private_ranges_expr,
     is_cidr_contained,
 )
-from parser.graph import Resource, SecurityGroupRule, Unresolved
+from parser.graph import Resource, ResourceReference, SecurityGroupRule, Unresolved
 
-SENSITIVE_PORTS: Set[int] = {21, 22, 23, 445, 3389}
+SENSITIVE_PORTS: Set[int] = {21, 22, 23, 445, 1433, 3306, 3389, 5432}
 
 # RFC 1918 Private Ranges + Loopback
 PRIVATE_RANGES: List[str] = [
@@ -36,10 +36,14 @@ def is_port_sensitive(from_port: int | None, to_port: int | None) -> bool:
     return False
 
 
-def is_cidr_private(cidr_str: str) -> bool:
+def is_cidr_private(cidr_str: Any) -> bool:
     """
     Returns True if cidr_str is fully contained within a private internal range.
     """
+    if isinstance(cidr_str, (Unresolved, ResourceReference)):
+        return False
+    if not isinstance(cidr_str, str):
+        return False
     return any(is_cidr_contained(cidr_str, priv) for priv in PRIVATE_RANGES)
 
 
@@ -76,14 +80,9 @@ def encode_sg_resource_symbolic(
                 rule_src.from_port, rule_src.to_port
             ):
                 for cidr in rule_src.cidr_blocks:
-                    if isinstance(cidr, Unresolved):
-                        return Unresolved(
-                            reason="Security group rule contains unresolved CIDR block",
-                            expression=cidr.expression,
-                        )
-                    # Also skip ResourceReferences for CIDRs, or fail-closed?
-                    # For safety, fail closed if we can't parse it as string.
-                    if not isinstance(cidr, str):
+                    if isinstance(cidr, (Unresolved, ResourceReference)):
+                        cidr = "0.0.0.0/0"
+                    elif not isinstance(cidr, str):
                         return Unresolved(
                             reason=f"Security group rule contains non-string CIDR: {type(cidr)}",
                             expression=None,

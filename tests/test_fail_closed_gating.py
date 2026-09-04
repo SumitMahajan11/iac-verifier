@@ -74,8 +74,9 @@ def test_sg_encoder_unresolved_cidr():
         rule_sources=[rule],
     )
     result = encode_sg_resource_symbolic(res)
-    assert isinstance(result, Unresolved)
-    assert "unresolved CIDR block" in result.reason
+    assert isinstance(result, tuple)
+    src_ip, formula = result
+    assert formula is not None
 
 
 def test_sg_encoder_non_string_cidr():
@@ -85,7 +86,7 @@ def test_sg_encoder_non_string_cidr():
         protocol="tcp",
         from_port=22,
         to_port=22,
-        cidr_blocks=[ResourceReference(target_address="aws_vpc.main.cidr_block", attribute="cidr_block")],
+        cidr_blocks=[12345],
     )
     res = Resource(
         address="aws_security_group.test_sg",

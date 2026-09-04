@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "category": "NSG_OVER_EXPOSURE",
+    "format": "ARM",
+    "expected": "UNSAT",
+    "description": "ARM template NSG restricting SSH (22) strictly to VirtualNetwork tag"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2021-02-01",
+      "name": "nsg-vnet-safe",
+      "location": "eastus",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowSSHVnetOnly",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "VirtualNetwork"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

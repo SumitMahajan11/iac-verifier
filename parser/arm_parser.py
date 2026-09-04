@@ -30,6 +30,10 @@ ARM_TO_AZURE_TYPE_MAP: Dict[str, str] = {
     "securityrules": "azurerm_network_security_rule",
     "microsoft.authorization/roleassignments": "azurerm_role_assignment",
     "microsoft.authorization/roledefinitions": "azurerm_role_definition",
+    "microsoft.authorization/policydefinitions": "azurerm_policy_definition",
+    "microsoft.authorization/policyassignments": "azurerm_policy_assignment",
+    "microsoft.management/managementgroups/policyassignments": "azurerm_management_group_policy_assignment",
+    "microsoft.authorization/managementgrouppolicyassignments": "azurerm_management_group_policy_assignment",
     "microsoft.managedidentity/userassignedidentities": "azurerm_user_assigned_identity",
     "microsoft.compute/virtualmachines": "azurerm_linux_virtual_machine",
     "microsoft.compute/virtualmachines/scalesets": "azurerm_linux_virtual_machine_scale_set",
@@ -433,6 +437,17 @@ def parse_arm_dict(arm_data: Dict[str, Any], file_path: Optional[str] = None) ->
             processed_attrs["role_name"] = role_name
             processed_attrs["permissions"] = permissions
             processed_attrs["assignable_scopes"] = scopes
+
+        elif res_type == "azurerm_policy_definition":
+            policy_rule = _eval_arm_expr(properties.get("policyRule") or properties.get("policy_rule"), parameters, variables)
+            processed_attrs["policy_rule"] = policy_rule
+            processed_attrs["policy_rule_dict"] = policy_rule if isinstance(policy_rule, dict) else None
+
+        elif res_type in ("azurerm_policy_assignment", "azurerm_management_group_policy_assignment"):
+            pol_def_id = _eval_arm_expr(properties.get("policyDefinitionId") or properties.get("policy_definition_id"), parameters, variables)
+            scope_val = _eval_arm_expr(properties.get("scope") or res_entry.get("scope"), parameters, variables)
+            processed_attrs["policy_definition_id"] = pol_def_id
+            processed_attrs["scope"] = scope_val
 
         resource = Resource(
             address=address,

@@ -11,6 +11,8 @@ import os
 from typing import Dict, Any, List, Tuple
 
 from parser.hcl_parser import parse_file, build_graph
+from parser.arm_parser import parse_arm_file
+from graph.azure_trust_graph import build_azure_trust_graph
 from parser.references import resolve_resource_references
 from parser.attachments import resolve_rule_attachments
 from solver.engine import VerificationEngine
@@ -75,10 +77,15 @@ class BenchmarkHarness:
                 continue
 
             try:
-                parsed = parse_file(file_path)
-                graph = build_graph(parsed)
-                graph = resolve_resource_references(graph)
-                graph = resolve_rule_attachments(graph)
+                if file_path.endswith(".json"):
+                    graph = parse_arm_file(file_path)
+                    build_azure_trust_graph(graph)
+                else:
+                    parsed = parse_file(file_path)
+                    graph = build_graph(parsed)
+                    graph = resolve_resource_references(graph)
+                    graph = resolve_rule_attachments(graph)
+                    build_azure_trust_graph(graph)
 
                 actual = "UNSAT"
                 if vuln_class == "SG_EXPOSURE":
@@ -104,6 +111,13 @@ class BenchmarkHarness:
                 elif vuln_class == "PRIVILEGE_ESCALATION_PATH":
                     res_eval = self.engine.verify_privilege_escalation(graph)
                     actual = res_eval.status
+
+                elif vuln_class in ("AZURE_NSG_EXPOSURE", "AZURE_RBAC_ESCALATION", "AZURE_GOVERNANCE_POLICY_VIOLATION"):
+                    eval_results = self.engine.verify_graph(graph)
+                    if any(r.status == "SAT" for r in eval_results):
+                        actual = "SAT"
+                    else:
+                        actual = "UNSAT"
 
             except Exception as e:
                 actual = "UNRESOLVABLE"
