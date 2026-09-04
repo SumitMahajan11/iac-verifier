@@ -54,7 +54,7 @@ def generate_unified_diff(
             with open(file_path, "r", encoding="utf-8") as f:
                 original_text = f.read()
 
-            original_lines = original_text.splitlines(keepends=True)
+            original_lines = original_text.splitlines()
 
             target_indices = list({
                 r.get("statement_index")
@@ -70,7 +70,7 @@ def generate_unified_diff(
             repaired_text = ASTRepairEngine.repair_hcl(
                 original_text, res_type, res_name, target_indices
             )
-            repaired_lines = repaired_text.splitlines(keepends=True)
+            repaired_lines = repaired_text.splitlines()
 
             diff = list(
                 difflib.unified_diff(
@@ -90,16 +90,16 @@ def generate_unified_diff(
     res_type = res_parts[0] if len(res_parts) > 0 else "aws_security_group"
     res_name = res_parts[1] if len(res_parts) > 1 else "main"
 
-    orig = [f'resource "{res_type}" "{res_name}" {{\n']
-    mod = [f'resource "{res_type}" "{res_name}" {{\n']
+    orig = [f'resource "{res_type}" "{res_name}" {{']
+    mod = [f'resource "{res_type}" "{res_name}" {{']
     for rule in deleted_rules:
         idx = rule.get("statement_index", 0)
         rtype = rule.get("rule_type", "Rule")
         details = rule.get("rule_details", "")
-        orig.append(f"  # [{idx}] {rtype}: {details}\n")
+        orig.append(f"  # [{idx}] {rtype}: {details}")
 
-    orig.append("}\n")
-    mod.append("}\n")
+    orig.append("}")
+    mod.append("}")
 
     diff = list(
         difflib.unified_diff(
