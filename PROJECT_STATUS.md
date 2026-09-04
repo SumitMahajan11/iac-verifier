@@ -9,19 +9,19 @@
 - [x] Phase 1: AST Parsing & Structural Resource Graph Engine
 - [x] Phase 2: Symbolic SMT Encoders & Hardened Solver Engine (Security Groups & IAM Wildcards)
 - [x] Phase 3: Cross-Account Privilege Escalation Reachability Engine (BMC SMT Solver)
-- [x] Phase 4: Hardened Benchmark Harness & Ground-Truth Labeled Public Corpora Evaluation (Terragoat & Sadcloud)
+- [x] Phase 4: Hardened Benchmark Harness & Ground-Truth Labeled Public Corpora Evaluation (AWS Corpus: 28 total JSON entries / 27 evaluated cases + 1 ambiguous excluded fixture; 19 SAT, 6 UNSAT, 2 UNRESOLVABLE; 1.0 Precision, 1.0 Recall)
 - [x] Phase 5: Multi-Cloud Expansion — Azure NSG SMT Priority & Explicit Allow/Deny Encoder (`encoder/azure_nsg_encoder.py`) [Fully Integrated with HCL Resource Graph, Multi-Port Unified UNSAT Proof Generation, Recursive Unresolved Gating]
 - [x] Phase 6: Azure RBAC Privilege Escalation Reachability Engine (`graph/azure_trust_graph.py`) [Precise Scope Inheritance, Resolved Role Names, AD Group Fail-Closed Gating]
 - [x] Phase 7: AST-Aware Auto-Repair Engine & Proof Certification (Format-preserving Lark AST node deletion)
 - [x] Phase 8: CLI Interface & Integration
 - [x] Phase 9: GitHub Action CI/CD Integration
 - [x] Phase 10: ARM Native Template Support (`parser/arm_parser.py`) [JSON Template Extraction, Variable/Parameter Resolution, Dynamic Expression Fail-Closed Gating, Cross-Format RBAC/NSG Equivalence]
-- [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`) [28-Case Ground-Truth Corpus: 16 SAT, 11 UNSAT, 1 UNRESOLVABLE; Decidable Metrics: 1.0 Precision, 1.0 Recall, 1.0 F1 Score; 100% Unresolvable Accuracy]
+- [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`) [Azure Corpus: 28 total JSON entries / 28 evaluated cases; 27 binary decidable (16 SAT, 11 UNSAT) + 1 UNRESOLVABLE; 1.0 Precision, 1.0 Recall, 100% Unresolvable Accuracy]
 - [x] Tier 3 Part A: Compositional Incremental Verification (`verify_incremental` & subgraph cache invalidation)
 - [x] Tier 3 Part B: Kubernetes Validating Admission Webhook (Live `kind` cluster `kubectl apply` verification)
 - [x] Z3 Performance Benchmarking: SMT Solver Overhead & Scaling Performance Baseline (`docs/z3_performance_report.md`)
 
-*Note: Phase 11 precision and recall metrics reflect evaluation on an author-written synthetic ground-truth corpus designed for specification verification, distinct from third-party public benchmark suites (e.g. Terragoat/Sadcloud).
+*Note: AWS corpus comprises 28 total file entries (27 evaluated cases + 1 ambiguous case excluded per §4 spec). Azure corpus comprises 28 total file entries (all 28 evaluated: 27 binary decidable + 1 unresolvable case). Phase 11 precision and recall metrics reflect evaluation on an author-written synthetic ground-truth corpus designed for specification verification, distinct from third-party public benchmark suites (e.g. Terragoat/Sadcloud).
 
 ## Test Suite Status
 - **Pass Count:** 206 passed in ~6.8s
