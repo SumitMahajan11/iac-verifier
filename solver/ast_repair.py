@@ -114,6 +114,15 @@ class ASTRepairEngine:
                 parser_file = getattr(parser_mod, "PARSER_FILE", None)
                 if parser_file is not None:
                     try:
+                        from lark import Lark
+                        with open(parser_file, "rb") as f:
+                            p = Lark.load(f)
+                        if hasattr(p, "parse"):
+                            return p
+                    except Exception as e:
+                        errors.append(f"Lark.load open rb PARSER_FILE failed: {e}")
+
+                    try:
                         import pickle
                         with open(parser_file, "rb") as f:
                             p = pickle.load(f)
@@ -121,14 +130,6 @@ class ASTRepairEngine:
                             return p
                     except Exception as e:
                         errors.append(f"pickle.load PARSER_FILE failed: {e}")
-
-                    try:
-                        from lark import Lark
-                        p = Lark.load(parser_file)
-                        if hasattr(p, "parse"):
-                            return p
-                    except Exception as e:
-                        errors.append(f"Lark.load PARSER_FILE failed: {e}")
 
                     try:
                         with open(parser_file, "r", encoding="utf-8", errors="ignore") as f:
@@ -150,16 +151,9 @@ class ASTRepairEngine:
                 return p
             parser_file = getattr(p_mod, "PARSER_FILE", None)
             if parser_file is not None:
-                try:
-                    import pickle
-                    with open(parser_file, "rb") as f:
-                        p = pickle.load(f)
-                    if hasattr(p, "parse"):
-                        return p
-                except Exception:
-                    pass
                 from lark import Lark
-                return Lark.load(parser_file)
+                with open(parser_file, "rb") as f:
+                    return Lark.load(f)
         except Exception as e:
             errors.append(f"Explicit import hcl2.parser failed: {e}")
 
