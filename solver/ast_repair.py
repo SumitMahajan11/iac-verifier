@@ -193,9 +193,15 @@ class ASTRepairEngine:
     @staticmethod
     def _find_body(node: Any) -> Optional[Any]:
         """Finds the child 'body' tree node."""
+        if not node:
+            return None
+        if hasattr(node, "data") and node.data == "body":
+            return node
         for child in getattr(node, "children", []):
-            if hasattr(child, "data") and child.data == "body":
-                return child
+            if hasattr(child, "data"):
+                found = ASTRepairEngine._find_body(child)
+                if found:
+                    return found
         return None
 
     @staticmethod
@@ -211,6 +217,12 @@ class ASTRepairEngine:
         for child in getattr(res_body, "children", []):
             if not hasattr(child, "data"):
                 continue
+
+            # Unwrap statement wrapper node if Lark CST wraps block/attribute in a statement node
+            if child.data == "statement" and hasattr(child, "children") and len(child.children) > 0:
+                inner = child.children[0]
+                if hasattr(inner, "data"):
+                    child = inner
 
             # Case 1: Standalone block (ingress { ... }, egress { ... }, security_rule { ... })
             if child.data == "block":
