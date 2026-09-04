@@ -97,7 +97,9 @@ class ASTRepairEngine:
         try:
             tree = hcl2.parser.Hcl2().lark_parser.parse(normalized_code)
         except Exception as err:
-            logging.warning(f"ASTRepairEngine: Lark CST parsing failed ({err}); falling back.")
+            import sys, traceback
+            sys.stderr.write(f"DEBUG_AST: Lark CST parsing failed for '{target_resource_type}.{target_resource_name}': {err}\n")
+            traceback.print_exc(file=sys.stderr)
             return hcl_code
 
         lines = normalized_code.splitlines(keepends=True)
@@ -107,12 +109,14 @@ class ASTRepairEngine:
             tree, target_resource_type, target_resource_name
         )
         if not resource_block:
-            logging.warning(f"ASTRepairEngine: Resource block '{target_resource_type}.{target_resource_name}' not found in CST.")
+            import sys
+            sys.stderr.write(f"DEBUG_AST: Resource block '{target_resource_type}.{target_resource_name}' NOT found in CST.\n")
             return hcl_code
 
         resource_body = ASTRepairEngine._find_body(resource_block)
         if not resource_body:
-            logging.warning(f"ASTRepairEngine: Resource body for '{target_resource_type}.{target_resource_name}' not found in CST.")
+            import sys
+            sys.stderr.write(f"DEBUG_AST: Resource body for '{target_resource_type}.{target_resource_name}' NOT found in CST.\n")
             return hcl_code
 
         # Collect all repairable candidate statement/rule nodes in order
@@ -125,7 +129,8 @@ class ASTRepairEngine:
                 nodes_to_delete.append(candidates[idx])
 
         if not nodes_to_delete:
-            logging.warning(f"ASTRepairEngine: Target statement indices {deleted_statement_indices} yielded no candidate nodes.")
+            import sys
+            sys.stderr.write(f"DEBUG_AST: Target statement indices {deleted_statement_indices} yielded no candidate nodes (len candidates: {len(candidates)}).\n")
             return hcl_code
 
         # Map nodes to their line ranges
