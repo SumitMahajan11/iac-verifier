@@ -83,8 +83,8 @@ def generate_unified_diff(
             )
             if diff:
                 return "\n".join(diff)
-        except Exception:
-            pass
+        except Exception as err:
+            logging.warning(f"generate_unified_diff AST repair failed for '{file_path}': {err}", exc_info=True)
 
     res_parts = resource_address.split(".")
     res_type = res_parts[0] if len(res_parts) > 0 else "aws_security_group"

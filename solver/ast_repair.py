@@ -30,27 +30,30 @@ def _get_val(node: Any) -> str:
 def _get_node_line_range(node: Any) -> Optional[Tuple[int, int]]:
     """
     Returns 1-indexed (start_line, end_line) for a Lark Tree or Token node.
-    Checks tree metadata first, falling back to leaf token line scanning for cross-platform robustness.
+    Extracts line metadata from tree.meta, token.line/end_line, or token.meta.line/end_line.
     """
     if node is None:
         return None
 
-    if hasattr(node, "meta") and hasattr(node.meta, "line") and hasattr(node.meta, "end_line"):
-        if node.meta.line is not None and node.meta.end_line is not None:
-            return (node.meta.line, node.meta.end_line)
-
     lines: List[int] = []
 
+    def _add_line(start: Optional[int], end: Optional[int]):
+        if start is not None and isinstance(start, int) and start > 0:
+            lines.append(start)
+            lines.append(end if (end is not None and isinstance(end, int) and end > 0) else start)
+
     def _scan(n: Any):
-        if hasattr(n, "line") and n.line is not None:
-            lines.append(n.line)
-            end = getattr(n, "end_line", n.line) or n.line
-            lines.append(end)
+        if hasattr(n, "meta") and n.meta is not None:
+            _add_line(getattr(n.meta, "line", None), getattr(n.meta, "end_line", None))
+
+        _add_line(getattr(n, "line", None), getattr(n, "end_line", None))
+
         if hasattr(n, "children"):
             for c in getattr(n, "children", []):
                 _scan(c)
 
     _scan(node)
+
     if lines:
         return (min(lines), max(lines))
 
