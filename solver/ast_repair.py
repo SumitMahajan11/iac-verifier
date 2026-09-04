@@ -110,9 +110,21 @@ class ASTRepairEngine:
                     from lark import Lark
                     return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
 
-                # Direct check 5: PARSER_FILE grammar / pickled parser file
+                # Direct check 5: PARSER_FILE grammar file via Lark.open
                 parser_file = getattr(parser_mod, "PARSER_FILE", None)
                 if parser_file is not None:
+                    try:
+                        from lark import Lark
+                        rel_file = getattr(parser_mod, "__file__", None)
+                        if rel_file:
+                            p = Lark.open(parser_file, rel_to=rel_file, parser="lalr", propagate_positions=True)
+                        else:
+                            p = Lark.open(parser_file, parser="lalr", propagate_positions=True)
+                        if hasattr(p, "parse"):
+                            return p
+                    except Exception as e:
+                        errors.append(f"Lark.open PARSER_FILE failed: {e}")
+
                     try:
                         from lark import Lark
                         with open(parser_file, "rb") as f:
@@ -121,15 +133,6 @@ class ASTRepairEngine:
                             return p
                     except Exception as e:
                         errors.append(f"Lark.load open rb PARSER_FILE failed: {e}")
-
-                    try:
-                        import pickle
-                        with open(parser_file, "rb") as f:
-                            p = pickle.load(f)
-                        if hasattr(p, "parse"):
-                            return p
-                    except Exception as e:
-                        errors.append(f"pickle.load PARSER_FILE failed: {e}")
 
                     try:
                         with open(parser_file, "r", encoding="utf-8", errors="ignore") as f:
@@ -152,8 +155,10 @@ class ASTRepairEngine:
             parser_file = getattr(p_mod, "PARSER_FILE", None)
             if parser_file is not None:
                 from lark import Lark
-                with open(parser_file, "rb") as f:
-                    return Lark.load(f)
+                rel_file = getattr(p_mod, "__file__", None)
+                if rel_file:
+                    return Lark.open(parser_file, rel_to=rel_file, parser="lalr", propagate_positions=True)
+                return Lark.open(parser_file, parser="lalr", propagate_positions=True)
         except Exception as e:
             errors.append(f"Explicit import hcl2.parser failed: {e}")
 
