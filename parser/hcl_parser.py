@@ -17,6 +17,7 @@ from parser.graph import (
     RuleSource,
     SecurityGroupRule,
     Unresolved,
+    ResourceReference,
 )
 
 
@@ -348,6 +349,43 @@ def _extract_security_group_rules(
             )
     return rules
 
+from parser.graph import AzureNsgRule
+
+def _extract_azure_nsg_rules(blocks: Any) -> list[AzureNsgRule]:
+    """Extracts AzureNsgRule objects from security_rule blocks."""
+    rules: list[AzureNsgRule] = []
+    if isinstance(blocks, dict):
+        blocks = [blocks]
+    if isinstance(blocks, list):
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            cleaned_block = {
+                _clean_key(k): _process_attribute_value(v)
+                for k, v in block.items()
+                if k != "__is_block__"
+            }
+            
+            prio = cleaned_block.get("priority")
+            if isinstance(prio, str) and prio.isdigit():
+                prio = int(prio)
+            
+            rules.append(
+                AzureNsgRule(
+                    name=_clean_string(cleaned_block.get("name")),
+                    priority=prio if isinstance(prio, int) else None,
+                    direction=_clean_string(cleaned_block.get("direction")),
+                    access=_clean_string(cleaned_block.get("access")),
+                    protocol=_clean_string(cleaned_block.get("protocol")),
+                    source_port_range=cleaned_block.get("source_port_range") or cleaned_block.get("source_port_ranges"),
+                    destination_port_range=cleaned_block.get("destination_port_range") or cleaned_block.get("destination_port_ranges"),
+                    source_address_prefix=cleaned_block.get("source_address_prefix") or cleaned_block.get("source_address_prefixes"),
+                    destination_address_prefix=cleaned_block.get("destination_address_prefix") or cleaned_block.get("destination_address_prefixes"),
+                )
+            )
+    return rules
+
+
 
 def extract_rule_sources(res_type: str, processed_attrs: dict[str, Any]) -> list[RuleSource]:
     """Extracts RuleSource objects from processed resource attributes based on resource type."""
@@ -415,6 +453,27 @@ def extract_rule_sources(res_type: str, processed_attrs: dict[str, Any]) -> list
                     rule_sources.extend(parsed)
                 elif isinstance(parsed, Unresolved):
                     rule_sources.append(parsed)
+    elif res_type == "azurerm_network_security_group":
+        security_rule_blocks = processed_attrs.get("security_rule")
+        if security_rule_blocks:
+            rule_sources.extend(_extract_azure_nsg_rules(security_rule_blocks))
+    elif res_type == "azurerm_network_security_rule":
+        prio = processed_attrs.get("priority")
+        if isinstance(prio, str) and prio.isdigit():
+            prio = int(prio)
+        rule_sources.append(
+            AzureNsgRule(
+                name=_clean_string(processed_attrs.get("name")),
+                priority=prio if isinstance(prio, int) else None,
+                direction=_clean_string(processed_attrs.get("direction")),
+                access=_clean_string(processed_attrs.get("access")),
+                protocol=_clean_string(processed_attrs.get("protocol")),
+                source_port_range=processed_attrs.get("source_port_range") or processed_attrs.get("source_port_ranges"),
+                destination_port_range=processed_attrs.get("destination_port_range") or processed_attrs.get("destination_port_ranges"),
+                source_address_prefix=processed_attrs.get("source_address_prefix") or processed_attrs.get("source_address_prefixes"),
+                destination_address_prefix=processed_attrs.get("destination_address_prefix") or processed_attrs.get("destination_address_prefixes"),
+            )
+        )
 
     return rule_sources
 
@@ -454,8 +513,6 @@ def build_graph(parsed: dict[str, Any], file_path: str | None = None) -> Resourc
                 # Post-processing rule sources from extracted attributes
                 rule_sources = extract_rule_sources(res_type, processed_attrs)
 
-
-
                 resource = Resource(
                     address=address,
                     type=res_type,
@@ -464,6 +521,6 @@ def build_graph(parsed: dict[str, Any], file_path: str | None = None) -> Resourc
                     file_path=file_path,
                 )
                 graph.add_resource(resource)
-
+                
     return graph
 

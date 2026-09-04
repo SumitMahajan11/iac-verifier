@@ -43,6 +43,7 @@ def encode_reachability_bmc(
     trust_graph: TrustGraph,
     target_roles: Set[str] | List[str],
     k: int,
+    entry_points: Optional[Set[str] | List[str]] = None,
 ) -> Tuple[List[z3.ExprRef], z3.BoolRef]:
     """Encodes trust graph reachability over bound `k` into a genuine Z3 SMT BMC formula.
 
@@ -50,6 +51,7 @@ def encode_reachability_bmc(
         trust_graph: Built `TrustGraph` containing nodes, entry points, and edges.
         target_roles: Set or list of role addresses that grant sensitive/wildcard permissions.
         k: The maximum hop bound.
+        entry_points: Optional explicit set of entry point nodes to check reachability from.
 
     Returns:
         tuple[list[z3.ExprRef], z3.BoolRef]:
@@ -57,7 +59,11 @@ def encode_reachability_bmc(
             - formula: The conjunction of entry point, transition, and target constraints.
     """
     target_set = set(target_roles)
-    external_set = set(trust_graph.external_entry_points)
+    if entry_points is not None:
+        external_set = set(entry_points)
+    else:
+        external_set = set(trust_graph.external_entry_points)
+
 
     hop_vars = [z3.String(f"hop_{i}") for i in range(k + 1)]
 

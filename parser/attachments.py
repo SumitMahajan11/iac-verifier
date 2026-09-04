@@ -85,7 +85,34 @@ def resolve_rule_attachments(graph: ResourceGraph) -> ResourceGraph:
                         f"[Tier B Ambiguous] Could not merge {address}: {len(candidates)} candidates found for '{sg_ref}'"
                     )
 
-        # 2. Handle aws_iam_role_policy
+        # 2. Handle azurerm_network_security_rule
+        elif res.type == "azurerm_network_security_rule":
+            nsg_ref = res.attributes.get("network_security_group_name")
+            if isinstance(nsg_ref, ResourceReference):
+                # Tier A match
+                target = graph.resources.get(nsg_ref.target_address)
+                if target and target.type == "azurerm_network_security_group":
+                    target.rule_sources.extend(res.rule_sources)
+                    res.merged_into = target.address
+                    print(
+                        f"[Tier A Merge] Merged {address} into {target.address} via structural reference {nsg_ref.target_address}.{nsg_ref.attribute}"
+                    )
+            elif isinstance(nsg_ref, str):
+                # Tier B fallback
+                candidates = _find_tier_b_candidates("azurerm_network_security_group", nsg_ref, graph)
+                if len(candidates) == 1:
+                    target = candidates[0]
+                    target.rule_sources.extend(res.rule_sources)
+                    res.merged_into = target.address
+                    print(
+                        f"[Tier B Merge] Merged {address} into {target.address} via unique declared value match '{nsg_ref}'"
+                    )
+                else:
+                    print(
+                        f"[Tier B Ambiguous] Could not merge {address}: {len(candidates)} candidates found for '{nsg_ref}'"
+                    )
+
+        # 3. Handle aws_iam_role_policy
         elif res.type == "aws_iam_role_policy":
             role_ref = res.attributes.get("role")
             if isinstance(role_ref, ResourceReference):

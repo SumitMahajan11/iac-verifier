@@ -61,6 +61,24 @@ The IaC SMT Verifier resolves these limitations by transforming infrastructure d
 - **Global Unresolved-Role Gating**: If any IAM role in the resource graph contains unresolvable references or invalid expressions in its `assume_role_policy`, the reachability verifier returns `UNRESOLVABLE` globally.
 - **Account-ID Scope Boundary**: Role targets are resolved and matched via role resource names / ARNs (`aws_iam_role.<name>`). Account IDs declared within ARNs serve as entry point anchors; cross-account ID validation across external AWS accounts is an accepted static analysis scope boundary.
 
+### Azure Network Security Group (NSG) Scope Boundaries (v1 Scope)
+- **Directional Semantics (`Inbound` vs `Outbound`)**:
+  - Phase 1 specifically models **`Inbound`** security rules (`direction = "Inbound"`). Default rules modeled: Priority 65000 (`AllowVnetInBound`), Priority 65001 (`AllowAzureLoadBalancerInBound`), Priority 65500 (`DenyAllInBound`).
+- **Priority-Ordered Evaluation Chain**:
+  - Rules are sorted by integer priority (`100` to `4096`).
+  - Modeled using a nested Z3 `If-Then-Else` priority chain where lower priority integer values strictly shadow higher integer values (e.g., Priority 100 `Deny` overrides Priority 200 `Allow`).
+- **Protocol Matching (`Tcp`, `Udp`, `Icmp`, `*` / `Any`)**:
+  - Enforces explicit protocol filtering per rule. Rules scoped to specific protocols (e.g. `protocol = "Udp"`) do not match queries targeting different protocols (e.g., `Tcp` port 22), preventing cross-protocol false `UNSAT` shadowing.
+- **Single NSG Scope Boundary**:
+  - Evaluates rules within a single Network Security Group in isolation (inline `security_rule` blocks or attached `azurerm_network_security_rule` resources). Dual-NSG composition (Subnet NSG ∧ NIC NSG evaluation) is deferred to v2.
+- **Symbolic Service Tags & ASGs**:
+  - `Internet` and `*` are mapped to `0.0.0.0/0`.
+  - Concrete IPs (`10.0.0.1`), CIDRs (`10.0.0.0/16`), and wildcard ranges (`*`) are encoded into 32-bit BitVectors.
+  - Other service tags (e.g. `VirtualNetwork`, `AzureLoadBalancer`) and Application Security Groups (`source_application_security_group_ids`) are flagged as symbolic constraints and safely isolated (`BoolVal(False)`) to avoid misinterpreting them as concrete IP matches.
+- **Singular & Plural Field Support**:
+  - Evaluates both singular (`source_port_range`, `destination_port_range`, `source_address_prefix`, `destination_address_prefix`) and plural array formats (`source_port_ranges`, `destination_port_ranges`, `source_address_prefixes`, `destination_address_prefixes`).
+
+
 ---
 
 ## §6 CIDR & IP Address SMT Encoding Semantics
@@ -70,6 +88,7 @@ The IaC SMT Verifier resolves these limitations by transforming infrastructure d
 
 ---
 
+
 ## §7 Privilege-Escalation Resolution & Graph Construction
 - **Dual-Policy Verification**: An assumption edge `Role_A -> Role_B` requires BOTH:
   1. Target `Role_B`'s `assume_role_policy` allows `sts:AssumeRole` to `Role_A` (or wildcard/account principal).
@@ -77,7 +96,19 @@ The IaC SMT Verifier resolves these limitations by transforming infrastructure d
 - **BMC Hop Bound Calculation**: Dynamically computes bound $k = \min(\text{configured\_cap}, \text{role\_count})$.
 - **Completeness Proof**: If $\text{role\_count} \le \text{configured\_cap}$, an `UNSAT` result guarantees complete unreachability. If $\text{role\_count} > \text{configured\_cap}$, an `UNSAT` result is reported as `UNSAT_BOUNDED`.
 
+### Azure RBAC Reachability Resolution (`graph/azure_trust_graph.py`)
+- **Scope Hierarchy Subsumption**:
+  - Validates Azure's 4-level scope hierarchy (`Management Group` -> `Subscription` -> `Resource Group` -> `Resource`).
+  - Subsumption checks strictly compare subscription and management-group IDs (`subscription_id`, `management_group_id`) to ensure isolation across distinct Azure subscription environments and prevent cross-environment false positives.
+- **Human-Readable Role Name Resolution**:
+  - Custom `azurerm_role_definition` attributes are resolved to clean human-readable names (`CustomAuthAdmin`) before trust edge construction, eliminating `ResourceReference` object leaks in witness output.
+- **Active Directory Group Principal Gating (Fail-Closed)**:
+  - Role assignments using `azuread_group` or `azuread_group_member` principals trigger `UNRESOLVABLE` status. Static group membership expansion requires dynamic Azure Active Directory state; evaluating group access statically without Graph API directory state would violate zero-trust guarantees.
+- **Cache-Key Compound Parameter Hash**:
+  - The SMT verification engine compounds `configured_cap` and `entry_principal` parameters into the cache key, ensuring distinct verification constraints do not collide on cached graph states.
+
 ---
+
 
 ## §8 Benchmark Methodology & Corpus Scale
 The evaluation dataset consists of **26 total ground-truth cases** (18 real-world vulnerable and safe resources extracted from public benchmark corpora `bridgecrewio/terragoat` and `nccgroup/sadcloud`, plus 8 synthetic edge-case fixtures).
@@ -192,7 +223,7 @@ Tier 1, Tier 2, and Tier 3 requirements are 100% complete and fully verified.
 3. **Verification Integration:** Direct execution of `parse_directory` -> `build_graph_with_expansion` -> `resolve_resource_references` -> `resolve_rule_attachments` -> `VerificationEngine.verify_graph`.
 4. **Container Hardening & PSS Compliance:** Refactored `Dockerfile.webhook` into a multi-stage build pinned to `python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534`. Enforced non-root container execution (`appuser`, UID 1000) and defined a strict `.dockerignore`. Validated compliance against Kubernetes Pod Security Standards (PSS) **Restricted Profile** (`pod-security.kubernetes.io/enforce=restricted` with `runAsNonRoot: true`, `seccompProfile: RuntimeDefault`, and `drop: [ALL]` capabilities). Measured a 31.8% image content size reduction from **151 MB** (single-stage) down to **103 MB** (hardened multi-stage).
 5. **Live Enforcement & CI Automation Evidence:** Verified initially via local `kind` cluster and continuously automated in CI via GitHub Actions (`.github/workflows/webhook-live-test.yml`) on every push/PR touching webhook-relevant paths (`cli/webhook.py`, `solver/**`, `parser/**`, `encoder/**`, `graph/**`, `k8s/**`, `Dockerfile.webhook`, `.dockerignore`). The workflow provisions an ephemeral `kind` cluster on GitHub-hosted runners (`ubuntu-latest`), builds `iac-webhook:latest`, labels the `default` namespace with `pod-security.kubernetes.io/enforce=restricted`, deploys the webhook, waits for pod readiness, and executes live end-to-end `kubectl apply` verification. Verified automated CI run: [Run #33730881852](https://github.com/SumitMahajan11/iac-verifier/actions/runs/33730881852) (Duration: 1m 30s, Status: SUCCESS), confirming exact server rejection (`[SG_OVER_EXPOSURE] aws_security_group.unsafe_sg`) for unsafe ConfigMaps and real API server creation for safe ConfigMaps under PSS restricted enforcement.
-6. **Fail-Closed Timeout Mechanism & Empirical Evidence:** Integrated a thread-safe, per-instance Z3 solver timeout (`timeout_ms`) across all solver routines (`verify_security_group`, `verify_iam_policy`, `verify_privilege_escalation`) and wrapped the webhook request handler in `cli/webhook.py` using `asyncio.wait_for(asyncio.to_thread(_process_and_verify, data, timeout), timeout)`. Enforces a default 8.0s internal timeout (configurable via `WEBHOOK_TIMEOUT_SECONDS`) strictly below Kubernetes' 10s `timeoutSeconds` limit. Distinguishes timeout failures from vulnerability rejections by returning `allowed: false` with explicit diagnostic messages ("Verification timeout: solver execution exceeded timeout limit ... — failing closed"). Empirically verified against real pathological SMT solver constraints: a configured 0.5s timeout was preempted in **0.527s**, returning an explicit fail-closed response before Kubernetes API server timeout. *Execution Model Caveat:* `asyncio.wait_for` bounds HTTP gateway response latency but cannot forcibly kill Python threads; Z3's native per-instance `solver.set("timeout", timeout_ms)` timer, not thread cancellation, is what ultimately preempts C++ computation and bounds background CPU resource usage.
+6. **Fail-Closed Timeout Mechanism & Z3 Native Preemption Architecture:** Integrated a thread-safe, native Z3 watchdog interrupt handler (`_check_solver_with_timeout`) and `VerificationEngine.interrupt()` across all solver routines (`verify_security_group`, `verify_iam_policy`, `verify_privilege_escalation`). When the configured solver timeout threshold (`timeout_ms`) is reached, a dedicated `threading.Timer` watchdog immediately triggers native C++ context preemption (`solver.ctx.interrupt()` and `z3.main_ctx().interrupt()`). This provides defense-in-depth against Z3 tactics or non-polling solver routines that bypass passive `solver.set("timeout")` checks. Solver outcome classification recognizes `interrupted` and `canceled` alongside `timeout` as `TIMEOUT` states, mapping directly to fail-closed admission reviews (`allowed: false`). Wrapped the webhook request handler in `cli/webhook.py` using `asyncio.wait_for(asyncio.to_thread(_process_and_verify, data, timeout), timeout)` with a default 8.0s limit (configurable via `WEBHOOK_TIMEOUT_SECONDS`) strictly below Kubernetes' 10s `timeoutSeconds` limit. Distinguishes timeout failures from vulnerability rejections by returning `allowed: false` with explicit diagnostic messages ("Verification timeout: solver execution exceeded timeout limit ... — failing closed"). Empirically verified against real pathological SMT solver constraints: a configured 0.5s timeout was preempted in **0.5157s**, returning an explicit fail-closed response before Kubernetes API server timeout, and passing all 118 unit and integration tests.
 7. **Defensive Payload Key Filtering:** `_process_and_verify` in `cli/webhook.py` defensively filters payload dictionary entries (`isinstance(filename, str) and filename.endswith(".tf") and isinstance(content, str)`), ensuring malformed or non-Terraform payload keys are safely skipped without throwing unhandled worker thread exceptions.
 8. **Structured JSON Logging & Prometheus Metrics Endpoint:** Integrated `structlog` for ISO-8601 formatted JSON logging across request lifecycles, and added a `/metrics` Prometheus scraping endpoint exporting counters (`iac_verifier_webhook_requests_total`, `iac_verifier_webhook_solver_timeout_total`) and latency histograms (`iac_verifier_webhook_request_duration_seconds`, `iac_verifier_webhook_solver_duration_seconds`). Validated live in `kind` cluster with empirical proof of counter increments (`outcome="solver_timeout"`) and structured JSON warning output under forced solver timeout. Automated CI run verified: [Run #33735680402](https://github.com/SumitMahajan11/iac-verifier/actions/runs/33735680402) (Duration: 1m 26s, Status: SUCCESS).
 9. **CI Python Version Matrix, Dependency Normalization & Status Badges:** Expanded `.github/workflows/verify.yml` into a multi-version test matrix strategy running the full 118-test pytest suite across Python 3.10, 3.11, and 3.12 on `ubuntu-latest`. Loosened `pyproject.toml` `requires-python` constraint from `>=3.11` to `>=3.10` after auditing dependency compatibility across `z3-solver`, `python-hcl2`, `httpx`, `fastapi`, `structlog`, `prometheus-client`, `cryptography`, and `pytest`. Resolved submodule checkout dependencies by mapping `.gitmodules` repository URLs (`https://github.com/nccgroup/sadcloud.git` and `https://github.com/bridgecrewio/terragoat.git`) to fetch the exact commit SHAs pinned in the git index (`f538652` and `729f8da`). Documented a 5-run iterative failure progression (`httpx` missing, missing submodules config, missing `.gitmodules`, stale `sadcloud` URL, missing `pip install -e .` in `action.yml`) before reaching a 100% green CI run: [Run #33738997548](https://github.com/SumitMahajan11/iac-verifier/actions/runs/33738997548) (all 3 matrix legs + composite action job passed). Integrated verifiable status badges in `README.md` for `verify.yml` and `webhook-live-test.yml`, empirically verified via HTTP `200 OK` `image/svg+xml` responses.

@@ -16,6 +16,7 @@ import sys
 from typing import Dict, Any, List, Optional
 
 from parser.hcl_parser import parse_file, build_graph
+from parser import parse_iac_file
 from parser.references import resolve_resource_references
 from parser.attachments import resolve_rule_attachments
 from solver.certificates import generate_certificate_from_result
@@ -24,7 +25,7 @@ from solver.repair import AutoRepairEngine
 
 
 def run_verify(target_path: str, json_output: bool = False, export_certificate_path: Optional[str] = None) -> int:
-    """Runs verification on target Terraform HCL file or directory."""
+    """Runs verification on target Terraform HCL or ARM JSON template file or directory."""
     if not os.path.exists(target_path):
         print(f"Error: Target path '{target_path}' does not exist.", file=sys.stderr)
         return 2
@@ -35,11 +36,11 @@ def run_verify(target_path: str, json_output: bool = False, export_certificate_p
     else:
         for root, _, files in os.walk(target_path):
             for file in files:
-                if file.endswith(".tf"):
+                if file.endswith(".tf") or file.endswith(".json"):
                     files_to_process.append(os.path.join(root, file))
 
     if not files_to_process:
-        print(f"Error: No .tf files found at '{target_path}'.", file=sys.stderr)
+        print(f"Error: No .tf or .json files found at '{target_path}'.", file=sys.stderr)
         return 2
 
     engine = VerificationEngine()
@@ -50,16 +51,21 @@ def run_verify(target_path: str, json_output: bool = False, export_certificate_p
 
     for file_path in files_to_process:
         try:
-            parsed = parse_file(file_path)
-            graph = build_graph(parsed, file_path=file_path)
-            graph = resolve_resource_references(graph)
-            graph = resolve_rule_attachments(graph)
-
+            graph = parse_iac_file(file_path)
             results = engine.verify_graph(graph)
-            
-            # Graph-level privilege escalation check if IAM roles present
+
+            if graph.unresolved_resources():
+                has_unresolvable = True
+                overall_results.append({
+                    "status": "UNRESOLVABLE",
+                    "file": file_path,
+                    "message": "Graph contains unresolved dependencies or invalid template format"
+                })
+
+            # Graph-level privilege escalation check if IAM roles or Azure role assignments present
             iam_roles = [r for r in graph.resources.values() if r.type == "aws_iam_role"]
-            if len(iam_roles) >= 2:
+            azure_roles = [r for r in graph.resources.values() if r.type == "azurerm_role_assignment"]
+            if (len(iam_roles) >= 2 or len(azure_roles) >= 1) and not graph.unresolved_resources():
                 esc_eval = engine.verify_privilege_escalation(graph)
                 if esc_eval:
                     results.append(esc_eval)
@@ -116,10 +122,11 @@ def run_repair(target_path: str, resource_address: str, pattern: str, json_outpu
 
     try:
         target_file = target_path if os.path.isfile(target_path) else os.path.join(target_path, "main.tf")
-        parsed = parse_file(target_file)
-        graph = build_graph(parsed, file_path=target_file)
-        graph = resolve_resource_references(graph)
-        graph = resolve_rule_attachments(graph)
+        if target_file.endswith(".json"):
+            print("Auto-repair is currently unsupported for ARM JSON templates (HCL format-preserving AST deletion only).", file=sys.stderr)
+            return 2
+
+        graph = parse_iac_file(target_file)
 
         repair_engine = AutoRepairEngine()
         result = repair_engine.repair_resource(graph, resource_address, pattern)

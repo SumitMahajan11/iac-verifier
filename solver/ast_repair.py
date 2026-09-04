@@ -40,9 +40,11 @@ class ASTRepairEngine:
             hcl_code += "\n"
 
         try:
-            tree = hcl2.parser.Hcl2.lark_parser.parse(hcl_code)
-        except Exception:
+            tree = hcl2.parser.Hcl2().lark_parser.parse(hcl_code)
+        except Exception as err:
             # Fallback if Lark parsing fails on non-standard HCL
+            import logging
+            logging.warning(f"ASTRepairEngine: Lark CST parsing failed ({err}); falling back.")
             return hcl_code
 
         lines = hcl_code.splitlines(keepends=True)

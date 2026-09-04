@@ -11,6 +11,7 @@ from encoder.sg_encoder import is_port_sensitive, is_cidr_private
 from encoder.iam_encoder import is_full_wildcard_action, is_full_wildcard_resource
 from solver.certificates import generate_sat_certificate, generate_unsat_certificate
 from solver.engine import VerificationEngine, VerificationResult
+from solver.ast_repair import ASTRepairEngine
 
 
 @dataclass
@@ -38,7 +39,7 @@ def generate_unified_diff(
 ) -> str:
     """
     Generates a unified diff patch (git-style) showing the deletion of identified vulnerable rules/statements.
-    If file_path exists and is readable, it operates on original HCL text.
+    If file_path exists and is readable, it operates on original HCL text via ASTRepairEngine.
     Otherwise, it produces a clear unified diff against a canonical block representation.
     """
     import difflib
@@ -51,80 +52,30 @@ def generate_unified_diff(
     if file_path and os.path.exists(file_path):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                original_lines = f.readlines()
+                original_text = f.read()
 
-            target_indices = {
+            original_lines = original_text.splitlines(keepends=True)
+
+            target_indices = list({
                 r.get("statement_index")
                 for r in deleted_rules
                 if r.get("resource_address") == resource_address or not r.get("resource_address")
-            }
+                if r.get("statement_index") is not None
+            })
 
             res_parts = resource_address.split(".")
             res_type = res_parts[0] if len(res_parts) > 0 else ""
             res_name = res_parts[1] if len(res_parts) > 1 else ""
-            resource_pattern = f'resource "{res_type}" "{res_name}"'
-            resource_pattern_alt = f"resource '{res_type}' '{res_name}'"
 
-            modified_lines = []
-            in_target_resource = False
-            in_inner_block = False
-            block_lines = []
-            current_statement_index = -1
-            resource_depth = 0
-            inner_depth = 0
-
-            for line in original_lines:
-                stripped = line.strip()
-                open_braces = line.count("{")
-                close_braces = line.count("}")
-
-                if not in_target_resource:
-                    if resource_pattern in line or resource_pattern_alt in line:
-                        in_target_resource = True
-                        resource_depth = open_braces - close_braces
-                        current_statement_index = -1
-                    modified_lines.append(line)
-                else:
-                    if in_inner_block:
-                        block_lines.append(line)
-                        inner_depth += open_braces - close_braces
-                        if inner_depth <= 0:
-                            in_inner_block = False
-                            if current_statement_index not in target_indices:
-                                modified_lines.extend(block_lines)
-                            block_lines = []
-                    else:
-                        is_block_start = (
-                            stripped.startswith("ingress {")
-                            or stripped.startswith("ingress")
-                            and "{" in stripped
-                            or stripped.startswith("egress {")
-                            or stripped.startswith("egress")
-                            and "{" in stripped
-                            or stripped.startswith("statement {")
-                            or stripped.startswith("Statement {")
-                            or stripped.startswith("dynamic ")
-                        )
-                        if is_block_start:
-                            current_statement_index += 1
-                            in_inner_block = True
-                            inner_depth = open_braces - close_braces
-                            block_lines = [line]
-                            if inner_depth <= 0:
-                                in_inner_block = False
-                                if current_statement_index not in target_indices:
-                                    modified_lines.extend(block_lines)
-                                block_lines = []
-                        else:
-                            resource_depth += open_braces - close_braces
-                            if resource_depth <= 0 and stripped == "}":
-                                in_target_resource = False
-                            modified_lines.append(line)
+            repaired_text = ASTRepairEngine.repair_hcl(
+                original_text, res_type, res_name, target_indices
+            )
+            repaired_lines = repaired_text.splitlines(keepends=True)
 
             diff = list(
                 difflib.unified_diff(
                     original_lines,
-                    modified_lines,
+                    repaired_lines,
                     fromfile=from_file,
                     tofile=to_file,
                     lineterm="",
@@ -230,6 +181,18 @@ class AutoRepairEngine:
                     message=f"Target resource '{resource_address}' not found in graph",
                 )
             initial_res = self.engine.verify_iam_policy(target_res)
+        elif pattern == "NSG_OVER_EXPOSURE":
+            target_res = graph.resources.get(resource_address)
+            if not target_res:
+                return RemediationResult(
+                    status="UNREMEDIABLE",
+                    resource_address=resource_address,
+                    pattern=pattern,
+                    deleted_rules=[],
+                    reverified_status="UNKNOWN",
+                    message=f"Target resource '{resource_address}' not found in graph",
+                )
+            initial_res = self.engine.verify_azure_nsg(target_res)
         elif pattern == "PRIVILEGE_ESCALATION_REACHABILITY":
             initial_res = self.engine.verify_privilege_escalation(
                 graph, target_resource=resource_address
@@ -261,7 +224,7 @@ class AutoRepairEngine:
         )
 
         # Step 2: Collect Candidate Rules
-        if pattern in ("SG_OVER_EXPOSURE", "IAM_WILDCARD_ALLOW"):
+        if pattern in ("SG_OVER_EXPOSURE", "IAM_WILDCARD_ALLOW", "NSG_OVER_EXPOSURE"):
             target_res = graph.resources[resource_address]
             candidate_tuples = [
                 (resource_address, idx, rule)
@@ -307,6 +270,10 @@ class AutoRepairEngine:
                     ver_res = self.engine.verify_security_group(
                         modified_graph.resources[resource_address]
                     )
+                elif pattern == "NSG_OVER_EXPOSURE":
+                    ver_res = self.engine.verify_azure_nsg(
+                        modified_graph.resources[resource_address]
+                    )
                 elif pattern == "IAM_WILDCARD_ALLOW":
                     ver_res = self.engine.verify_iam_policy(
                         modified_graph.resources[resource_address]
@@ -326,6 +293,10 @@ class AutoRepairEngine:
                                 sub_graph = copy_graph_without_rules(graph, sub_pairs)
                                 if pattern == "SG_OVER_EXPOSURE":
                                     sub_ver = self.engine.verify_security_group(
+                                        sub_graph.resources[resource_address]
+                                    )
+                                elif pattern == "NSG_OVER_EXPOSURE":
+                                    sub_ver = self.engine.verify_azure_nsg(
                                         sub_graph.resources[resource_address]
                                     )
                                 elif pattern == "IAM_WILDCARD_ALLOW":
@@ -366,6 +337,10 @@ class AutoRepairEngine:
 
         if pattern == "SG_OVER_EXPOSURE":
             final_ver = self.engine.verify_security_group(
+                final_graph.resources[resource_address]
+            )
+        elif pattern == "NSG_OVER_EXPOSURE":
+            final_ver = self.engine.verify_azure_nsg(
                 final_graph.resources[resource_address]
             )
         elif pattern == "IAM_WILDCARD_ALLOW":

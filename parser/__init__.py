@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from parser.arm_parser import parse_arm_dict, parse_arm_file
 from parser.attachments import resolve_rule_attachments
 from parser.expansion import (
     build_graph_with_expansion,
@@ -31,6 +34,20 @@ from parser.variables import (
     resolve_attribute,
 )
 
+
+def parse_iac_file(file_path: str | Path) -> ResourceGraph:
+    """Dispatches parsing based on file type (.json for ARM template, .tf for HCL)."""
+    p = Path(file_path)
+    if p.suffix.lower() == ".json":
+        return parse_arm_file(p)
+    else:
+        parsed = parse_file(p)
+        graph = build_graph(parsed, file_path=str(p))
+        graph = resolve_resource_references(graph)
+        graph = resolve_rule_attachments(graph)
+        return graph
+
+
 __all__ = [
     "Unresolved",
     "ResourceReference",
@@ -58,4 +75,8 @@ __all__ = [
     "load_variable_values",
     "load_local_values",
     "resolve_attribute",
+    "parse_arm_file",
+    "parse_arm_dict",
+    "parse_iac_file",
 ]
+

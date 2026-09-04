@@ -8,6 +8,7 @@ import json
 import hashlib
 import dataclasses
 import os
+import threading
 
 z3.set_param("proof", True)
 
@@ -27,6 +28,7 @@ from encoder.sg_encoder import (
     is_port_sensitive,
     SENSITIVE_PORTS,
 )
+from encoder.cidr import make_ip_in_private_ranges_expr
 from graph.trust_graph import build_trust_graph
 from parser.graph import (
     ExternalManagedPolicy,
@@ -35,8 +37,11 @@ from parser.graph import (
     ResourceGraph,
     ResourceReference,
     SecurityGroupRule,
+    AzureNsgRule,
     Unresolved,
 )
+from encoder.azure_nsg_encoder import AzureNSGEncoder
+
 
 
 @dataclass(frozen=True)
@@ -62,7 +67,13 @@ def _default_encoder(obj):
         return sorted(list(obj))
     return str(obj)
 
-def compute_cache_key(graph: ResourceGraph, resource_address: str, pattern: str) -> str:
+def compute_cache_key(
+    graph: ResourceGraph,
+    resource_address: str,
+    pattern: str,
+    configured_cap: Optional[int] = None,
+    entry_principal: Optional[str] = None,
+) -> str:
     res_list = [resource_address]
     
     if pattern == "PRIVILEGE_ESCALATION_REACHABILITY":
@@ -87,7 +98,12 @@ def compute_cache_key(graph: ResourceGraph, resource_address: str, pattern: str)
         
         res_list = sorted(list(deps))
     
-    state = [("meta_pattern", pattern), ("meta_address", resource_address)]
+    state = [
+        ("meta_pattern", pattern),
+        ("meta_address", resource_address),
+        ("meta_configured_cap", str(configured_cap)),
+        ("meta_entry_principal", str(entry_principal)),
+    ]
     for addr in res_list:
         r = graph.resources.get(addr)
         if r:
@@ -95,6 +111,7 @@ def compute_cache_key(graph: ResourceGraph, resource_address: str, pattern: str)
     
     data_str = json.dumps(state, default=_default_encoder, sort_keys=True)
     return hashlib.sha256(data_str.encode("utf-8")).hexdigest()
+
 
 class VerificationCache:
     def __init__(self, cache_dir: str = ".iac_cache"):
@@ -129,6 +146,43 @@ class VerificationEngine:
     def __init__(self, use_cache: bool = True, timeout_ms: Optional[int] = None):
         self.cache = VerificationCache() if use_cache else None
         self.timeout_ms = timeout_ms
+        self._current_solver: Optional[z3.Solver] = None
+
+    def interrupt(self):
+        """
+        Triggers native C++ interruption on the active Z3 solver context.
+        Forces immediate preemption of long-running SMT solver calculations.
+        """
+        if self._current_solver is not None:
+            try:
+                self._current_solver.ctx.interrupt()
+            except Exception:
+                pass
+        try:
+            z3.main_ctx().interrupt()
+        except Exception:
+            pass
+
+    def _check_solver_with_timeout(
+        self, solver: z3.Solver, timeout_ms: Optional[int] = None
+    ) -> z3.CheckResult:
+        eff_timeout = timeout_ms or self.timeout_ms
+        timer = None
+        if eff_timeout is not None and eff_timeout > 0:
+            solver.set("timeout", eff_timeout)
+            timeout_sec = eff_timeout / 1000.0
+            timer = threading.Timer(timeout_sec, lambda: solver.ctx.interrupt())
+            timer.daemon = True
+            timer.start()
+
+        self._current_solver = solver
+        try:
+            res = solver.check()
+            return res
+        finally:
+            self._current_solver = None
+            if timer is not None:
+                timer.cancel()
 
     def verify_graph(self, graph: ResourceGraph, timeout_ms: Optional[int] = None) -> List[VerificationResult]:
         results: List[VerificationResult] = []
@@ -166,6 +220,20 @@ class VerificationEngine:
                         self.cache.put(cache_key, res)
                 if res:
                     results.append(res)
+                    
+            # Check Pattern 3: Azure NSG Over-Exposure
+            if resource.type in ("azurerm_network_security_group", "azurerm_network_security_rule"):
+                res = None
+                cache_key = None
+                if self.cache:
+                    cache_key = compute_cache_key(graph, address, "NSG_OVER_EXPOSURE")
+                    res = self.cache.get(cache_key)
+                if not res:
+                    res = self.verify_azure_nsg(resource, timeout_ms=eff_timeout)
+                    if res and self.cache and cache_key:
+                        self.cache.put(cache_key, res)
+                if res:
+                    results.append(res)
 
         return results
 
@@ -187,11 +255,9 @@ class VerificationEngine:
         z3.set_param("proof", True)
         solver = z3.Solver()
         eff_timeout = timeout_ms or self.timeout_ms
-        if eff_timeout is not None:
-            solver.set("timeout", eff_timeout)
 
         solver.add(unsafe_formula)
-        check_res = solver.check()
+        check_res = self._check_solver_with_timeout(solver, eff_timeout)
 
         if check_res == z3.sat:
             model = solver.model()
@@ -245,12 +311,123 @@ class VerificationEngine:
 
         else:
             reason = solver.reason_unknown()
-            status = "TIMEOUT" if reason == "timeout" else "UNKNOWN"
-            msg = f"Z3 solver timed out for security group '{resource.address}'" if reason == "timeout" else f"Z3 solver returned UNKNOWN for security group '{resource.address}'"
+            is_timeout = reason in ("timeout", "interrupted", "canceled")
+            status = "TIMEOUT" if is_timeout else "UNKNOWN"
+            msg = f"Z3 solver timed out for security group '{resource.address}'" if is_timeout else f"Z3 solver returned UNKNOWN for security group '{resource.address}'"
             return VerificationResult(
                 status=status,
                 resource_address=resource.address,
                 pattern="SG_OVER_EXPOSURE",
+                message=msg,
+            )
+
+    def verify_azure_nsg(
+        self, resource: Resource, timeout_ms: Optional[int] = None
+    ) -> Optional[VerificationResult]:
+        def is_unresolved(val):
+            if isinstance(val, (Unresolved, ResourceReference)):
+                return True
+            if isinstance(val, list):
+                return any(is_unresolved(item) for item in val)
+            return False
+
+        # Unresolved data check on original dataclasses
+        if any(is_unresolved(getattr(rs, f.name)) for rs in resource.rule_sources if isinstance(rs, AzureNsgRule) for f in dataclasses.fields(rs)):
+            return VerificationResult(
+                status="UNRESOLVABLE",
+                resource_address=resource.address,
+                pattern="NSG_OVER_EXPOSURE",
+                message="Unable to verify NSG due to unresolved data",
+            )
+            
+        # Convert AzureNsgRule objects to dicts for the encoder
+        rules_dict_list = []
+        for rs in resource.rule_sources:
+            if isinstance(rs, AzureNsgRule):
+                rule_dict = dataclasses.asdict(rs)
+                # Clean up None values
+                rule_dict = {k: v for k, v in rule_dict.items() if v is not None}
+                rules_dict_list.append(rule_dict)
+            
+        encoder = AzureNSGEncoder()
+        
+        chain_expr, ip_sym, port_sym, dest_ip_sym, src_port_sym, sorted_rules = encoder.encode_nsg_rules(
+            rules_dict_list, target_protocol="Tcp"
+        )
+
+        sensitive_port_cond = z3.Or([port_sym == port for port in SENSITIVE_PORTS])
+
+        unsafe_formula = z3.And(
+            chain_expr,
+            sensitive_port_cond,
+            z3.Not(make_ip_in_private_ranges_expr(ip_sym, ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "168.63.129.16/32"]))
+        )
+
+        z3.set_param("proof", True)
+        solver = z3.Solver()
+        eff_timeout = timeout_ms or self.timeout_ms
+
+        solver.add(unsafe_formula)
+        check_res = self._check_solver_with_timeout(solver, eff_timeout)
+
+        if check_res == z3.sat:
+            violating_ports = []
+            counterexample_ip_str = None
+
+            for port in SENSITIVE_PORTS:
+                port_solver = z3.Solver()
+                port_formula = z3.And(
+                    chain_expr,
+                    port_sym == port,
+                    z3.Not(make_ip_in_private_ranges_expr(ip_sym, ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "168.63.129.16/32"]))
+                )
+                port_solver.add(port_formula)
+                port_check = self._check_solver_with_timeout(port_solver, eff_timeout)
+
+                if port_check == z3.sat:
+                    violating_ports.append(port)
+                    if not counterexample_ip_str:
+                        model = port_solver.model()
+                        counterexample_ip_int = model[ip_sym].as_long() if ip_sym in model else 0
+                        counterexample_ip_str = str(ipaddress.IPv4Address(counterexample_ip_int))
+
+            return VerificationResult(
+                status="SAT",
+                resource_address=resource.address,
+                pattern="NSG_OVER_EXPOSURE",
+                message=f"Azure NSG '{resource.address}' exposes sensitive ports ({', '.join(map(str, violating_ports))}) to public IP range",
+                witness={
+                    "resource": resource.address,
+                    "sensitive_ports": violating_ports,
+                    "smt_counterexample_ip": counterexample_ip_str or "0.0.0.0",
+                },
+            )
+
+        elif check_res == z3.unsat:
+            proof_str = None
+            try:
+                if solver.proof() is not None:
+                    proof_str = str(solver.proof().sexpr())
+            except Exception:
+                proof_str = None
+
+            return VerificationResult(
+                status="UNSAT",
+                resource_address=resource.address,
+                pattern="NSG_OVER_EXPOSURE",
+                message=f"Azure NSG '{resource.address}' is safe from sensitive port over-exposure",
+                z3_proof_sexpr=proof_str,
+            )
+
+        else:
+            reason = solver.reason_unknown()
+            is_timeout = reason in ("timeout", "interrupted", "canceled")
+            status = "TIMEOUT" if is_timeout else "UNKNOWN"
+            msg = f"Z3 solver timed out for NSG '{resource.address}'" if is_timeout else f"Z3 solver returned UNKNOWN for NSG '{resource.address}'"
+            return VerificationResult(
+                status=status,
+                resource_address=resource.address,
+                pattern="NSG_OVER_EXPOSURE",
                 message=msg,
             )
 
@@ -272,11 +449,9 @@ class VerificationEngine:
         z3.set_param("proof", True)
         solver = z3.Solver()
         eff_timeout = timeout_ms or self.timeout_ms
-        if eff_timeout is not None:
-            solver.set("timeout", eff_timeout)
 
         solver.add(unsafe_formula)
-        check_res = solver.check()
+        check_res = self._check_solver_with_timeout(solver, eff_timeout)
 
         if check_res == z3.sat:
             model = solver.model()
@@ -329,8 +504,9 @@ class VerificationEngine:
 
         else:
             reason = solver.reason_unknown()
-            status = "TIMEOUT" if reason == "timeout" else "UNKNOWN"
-            msg = f"Z3 solver timed out for IAM resource '{resource.address}'" if reason == "timeout" else f"Z3 solver returned UNKNOWN for IAM resource '{resource.address}'"
+            is_timeout = reason in ("timeout", "interrupted", "canceled")
+            status = "TIMEOUT" if is_timeout else "UNKNOWN"
+            msg = f"Z3 solver timed out for IAM resource '{resource.address}'" if is_timeout else f"Z3 solver returned UNKNOWN for IAM resource '{resource.address}'"
             return VerificationResult(
                 status=status,
                 resource_address=resource.address,
@@ -343,8 +519,10 @@ class VerificationEngine:
         graph: ResourceGraph,
         target_resource: Optional[str] = None,
         configured_cap: int = 10,
+        entry_principal: Optional[str] = None,
         timeout_ms: Optional[int] = None,
     ) -> VerificationResult:
+
         """Verifies cross-account privilege escalation reachability using BMC SMT encoding.
 
         Branches cleanly on:
@@ -358,10 +536,17 @@ class VerificationEngine:
 
         cache_key = None
         if self.cache:
-            cache_key = compute_cache_key(graph, target_resource or "graph", "PRIVILEGE_ESCALATION_REACHABILITY")
+            cache_key = compute_cache_key(
+                graph,
+                target_resource or "graph",
+                "PRIVILEGE_ESCALATION_REACHABILITY",
+                configured_cap=configured_cap,
+                entry_principal=entry_principal,
+            )
             cached_res = self.cache.get(cache_key)
             if cached_res:
                 return cached_res
+
 
         if trust_graph.unresolvable_roles:
             reasons_summary = "; ".join(trust_graph.unresolvable_reasons)
@@ -405,11 +590,12 @@ class VerificationEngine:
                         if not isinstance(encoded_scope, Unresolved):
                             _, _, unsafe_formula = encoded_scope
                             s = z3.Solver()
-                            if eff_timeout is not None:
-                                s.set("timeout", eff_timeout)
                             s.add(unsafe_formula)
-                            if s.check() == z3.sat:
+                            if self._check_solver_with_timeout(s, eff_timeout) == z3.sat:
                                 target_roles.add(address)
+
+            if trust_graph.target_roles:
+                target_roles.update(trust_graph.target_roles)
 
         role_count = len([n for n in trust_graph.nodes if not n.startswith("account:")])
         k, is_complete = compute_hop_bound(role_count, configured_cap)
@@ -436,17 +622,27 @@ class VerificationEngine:
                 self.cache.put(cache_key, res)
             return res
 
+        ep_set: Optional[Set[str]] = None
+        if entry_principal:
+            if entry_principal in trust_graph.nodes:
+                ep_set = {entry_principal}
+            elif f"account:{entry_principal}" in trust_graph.nodes:
+                ep_set = {f"account:{entry_principal}"}
+            else:
+                ep_set = {entry_principal}
+
         # Iterative shortening / shortest-reachable-path query (1 to k bounds)
         for current_k in range(1, k + 1):
-            hop_vars, formula = encode_reachability_bmc(trust_graph, target_roles, current_k)
+            hop_vars, formula = encode_reachability_bmc(
+                trust_graph, target_roles, current_k, entry_points=ep_set
+            )
+
 
             z3.set_param("proof", True)
             solver = z3.Solver()
-            if eff_timeout is not None:
-                solver.set("timeout", eff_timeout)
 
             solver.add(formula)
-            check_res = solver.check()
+            check_res = self._check_solver_with_timeout(solver, eff_timeout)
 
             if check_res == z3.sat:
                 model = solver.model()
@@ -463,8 +659,9 @@ class VerificationEngine:
                 return res
             elif check_res == z3.unknown:
                 reason = solver.reason_unknown()
-                status = "TIMEOUT" if reason == "timeout" else "UNKNOWN"
-                msg = f"Z3 solver timed out during reachability check at hop {current_k}" if reason == "timeout" else f"Z3 solver returned UNKNOWN during reachability check at hop {current_k}"
+                is_timeout = reason in ("timeout", "interrupted", "canceled")
+                status = "TIMEOUT" if is_timeout else "UNKNOWN"
+                msg = f"Z3 solver timed out during reachability check at hop {current_k}" if is_timeout else f"Z3 solver returned UNKNOWN during reachability check at hop {current_k}"
                 res = VerificationResult(
                     status=status,
                     resource_address=target_resource or "graph",
@@ -567,6 +764,29 @@ class VerificationEngine:
                         if self.cache:
                             self.cache.put(cache_key, res)
                         results.append(res)
+                        
+            elif resource.type in ("azurerm_network_security_group", "azurerm_network_security_rule"):
+                cache_key = compute_cache_key(graph, address, "NSG_OVER_EXPOSURE")
+                deps = set([address])
+                for addr, r in graph.resources.items():
+                    if r.merged_into == address:
+                        deps.add(addr)
+                for rs in resource.rule_sources:
+                    if getattr(rs, "destination_address_prefix", None):
+                        if isinstance(rs.destination_address_prefix, ResourceReference):
+                            deps.add(rs.destination_address_prefix.target_address)
+                        elif isinstance(rs.destination_address_prefix, str):
+                            deps.add(rs.destination_address_prefix)
+                
+                is_affected = any(dep in directly_modified for dep in deps)
+                
+                if is_affected or not self.cache or not self.cache.get(cache_key):
+                    res = self.verify_azure_nsg(resource)
+                    if res:
+                        if self.cache:
+                            self.cache.put(cache_key, res)
+                        results.append(res)
+
                         
         # Privilege escalation is global, if its cache key changed, re-run
         cache_key = compute_cache_key(graph, "graph", "PRIVILEGE_ESCALATION_REACHABILITY")

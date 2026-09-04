@@ -71,6 +71,22 @@ class SecurityGroupRule(RuleSource):
 
 
 @dataclass
+class AzureNsgRule(RuleSource):
+    """Represents an Azure Network Security Group rule."""
+    
+    name: str | None = None
+    priority: int | None = None
+    direction: str | None = None
+    access: str | None = None
+    protocol: str | None = None
+    source_port_range: str | list[str] | None = None
+    destination_port_range: str | list[str] | None = None
+    source_address_prefix: str | list[str] | Unresolved | ResourceReference | None = None
+    destination_address_prefix: str | list[str] | Unresolved | ResourceReference | None = None
+
+
+
+@dataclass
 class IamPolicyStatement(RuleSource):
     """Represents an IAM policy statement granting or denying permissions."""
 

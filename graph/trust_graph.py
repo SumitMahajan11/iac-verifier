@@ -32,6 +32,7 @@ class TrustGraph:
     edges: List[TrustEdge] = field(default_factory=list)
     unresolvable_roles: Set[str] = field(default_factory=set)
     unresolvable_reasons: List[str] = field(default_factory=list)
+    target_roles: Set[str] = field(default_factory=set)
 
 
 RE_ACCOUNT_ID = re.compile(r"^\d{12}$")
@@ -198,5 +199,10 @@ def build_trust_graph(resource_graph: ResourceGraph) -> TrustGraph:
                 trust_graph.edges.append(
                     TrustEdge(from_node=from_n, to_node=to_n, trust_statement=t_stmt, identity_statement=matched_i_stmt)
                 )
+
+    # Populate Azure RBAC nodes and edges if present
+    from graph.azure_trust_graph import build_azure_trust_graph
+    azure_targets = build_azure_trust_graph(resource_graph, trust_graph)
+    trust_graph.target_roles.update(azure_targets)
 
     return trust_graph
