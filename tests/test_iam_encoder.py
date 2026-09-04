@@ -196,3 +196,79 @@ def test_not_action_encoding():
     action_val = str(m[act_var]).strip('"')
     assert not action_val.startswith("ec2:")
 
+
+def test_not_action_prefix_wildcard_matching():
+    """
+    Verifies that trailing prefix wildcards in NotAction (e.g. 'ec2:Describe*') are encoded
+    as PrefixOf constraints rather than plain string equality.
+    """
+    act_var = z3.String("act")
+    expr = make_action_match_expr(act_var, "ec2:Describe*")
+    assert not isinstance(expr, Unresolved)
+
+    # ec2:DescribeInstances matches ec2:Describe* -> SAT
+    s1 = z3.Solver()
+    s1.add(expr, act_var == z3.StringVal("ec2:DescribeInstances"))
+    assert s1.check() == z3.sat
+
+    # ec2:RunInstances does NOT match ec2:Describe* -> UNSAT
+    s2 = z3.Solver()
+    s2.add(expr, act_var == z3.StringVal("ec2:RunInstances"))
+    assert s2.check() == z3.unsat
+
+
+def test_not_action_deny_service_exclusion_safe():
+    """
+    Test fixture where safety depends on resolving NotAction correctly:
+    Statement 1: Allow Action "*" on Resource "*"
+    Statement 2: Deny NotAction ["s3:*"] on Resource "*" (Denies everything except s3:*)
+
+    Asserting non-S3 action (e.g. iam:CreateUser) -> UNSAT (Deny is active for non-S3 actions).
+    Asserting S3 action (e.g. s3:GetObject) -> SAT (Deny is excluded for S3 actions).
+    """
+    stmts = [
+        IamPolicyStatement(
+            effect="Allow",
+            actions=["*"],
+            resources=["*"],
+        ),
+        IamPolicyStatement(
+            effect="Deny",
+            not_actions=["s3:*"],
+            resources=["*"],
+        ),
+    ]
+    res = encode_iam_scope_symbolic(stmts, scope_id="not_action_deny_test")
+    assert not isinstance(res, Unresolved)
+    act_var, res_var, unsafe_expr = res
+
+    # 1. Non-S3 action (e.g. iam:CreateUser) -> Deny is active -> UNSAT (Safe/Blocked)
+    solver1 = z3.Solver()
+    solver1.add(unsafe_expr)
+    solver1.add(act_var == z3.StringVal("iam:CreateUser"))
+    assert solver1.check() == z3.unsat
+
+    # 2. S3 action (e.g. s3:GetObject) -> Deny excluded -> SAT (Allowed)
+    solver2 = z3.Solver()
+    solver2.add(unsafe_expr)
+    solver2.add(act_var == z3.StringVal("s3:GetObject"))
+    assert solver2.check() == z3.sat
+
+
+def test_mid_string_glob_fail_closed_unresolved():
+    """
+    Verifies that unsupported mid-string glob patterns (e.g. 's3:Get*Object' or '?')
+    fail closed and return Unresolved rather than silently executing plain string equality.
+    """
+    stmts = [
+        IamPolicyStatement(
+            effect="Allow",
+            actions=["s3:Get*Object"],
+            resources=["*"],
+        )
+    ]
+    res = encode_iam_scope_symbolic(stmts, scope_id="mid_string_glob_test")
+    assert isinstance(res, Unresolved)
+    assert "unsupported mid-string glob pattern" in res.reason.lower()
+
+

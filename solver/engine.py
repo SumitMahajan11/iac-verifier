@@ -501,11 +501,17 @@ class VerificationEngine:
 
         for assign in policy_assignments:
             pol_def_id = assign.attributes.get("policy_definition_id")
+            if isinstance(pol_def_id, Unresolved):
+                return VerificationResult(
+                    status="UNRESOLVABLE",
+                    resource_address=resource.address,
+                    pattern="AZURE_GOVERNANCE_POLICY_VIOLATION",
+                    message=f"Unable to evaluate Azure policy for {resource.address}: Unresolved policy definition ID: {pol_def_id.reason}",
+                )
+
             pol_def_str = str(pol_def_id) if pol_def_id is not None else ""
             if isinstance(pol_def_id, ResourceReference):
                 pol_def_str += " " + pol_def_id.target_address
-            elif isinstance(pol_def_id, Unresolved):
-                pol_def_str += " " + getattr(pol_def_id, "expression", "") + " " + getattr(pol_def_id, "reason", "")
 
             policy_def = None
             for r in graph.resources.values():

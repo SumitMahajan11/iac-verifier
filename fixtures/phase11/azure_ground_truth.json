@@ -279,5 +279,46 @@
     "format": "ARM",
     "expected_engine_state": "UNRESOLVABLE",
     "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case29",
+    "file": "fixtures/phase11/azure_corpus/case29_policy_dynamic_subscription_fn.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNRESOLVABLE",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case30",
+    "file": "fixtures/phase11/azure_corpus/case30_policy_unresolved_param.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNRESOLVABLE",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case31",
+    "file": "fixtures/phase11/azure_corpus/case31_policy_dynamic_resource_id.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNRESOLVABLE",
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "azure_governance_benchmark",
+    "case_id": "case32",
+    "file": "fixtures/phase11/azure_corpus/case32_policy_external_defender_ref.json",
+    "category": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "ARM",
+    "expected_engine_state": "UNRESOLVABLE",
+    "ambiguity": { "is_ambiguous": false }
   }
 ]
+

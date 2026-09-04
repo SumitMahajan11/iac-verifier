@@ -6,6 +6,19 @@ import z3
 from parser.graph import ExternalManagedPolicy, IamPolicyStatement, Unresolved
 
 
+def is_unsupported_glob(pattern: str) -> bool:
+    """
+    Returns True if pattern contains mid-string wildcards or unsupported glob syntax (e.g. 's3:Get*Object' or '?'),
+    which cannot be encoded as prefix or exact string equality in Z3 String theory.
+    """
+    p = pattern.strip()
+    if "?" in p:
+        return True
+    if "*" in p[:-1]:  # '*' appears anywhere except at the end
+        return True
+    return False
+
+
 def is_full_wildcard_action(action: str) -> bool:
     """
     Checks if an action string is a full wildcard ('*') or service wildcard ('s3:*').
@@ -24,26 +37,38 @@ def is_full_wildcard_resource(resource: str) -> bool:
     return res == "*" or res == "*/*"
 
 
-def make_action_match_expr(action_var: z3.SeqRef, action_pattern: str) -> z3.BoolRef:
+def make_action_match_expr(action_var: z3.SeqRef, action_pattern: str) -> Union[z3.BoolRef, Unresolved]:
     """
     Generates a symbolic Z3 String constraint asserting that free String variable action_var
     matches action_pattern using Z3 String theory (PrefixOf or equality).
+    Returns Unresolved if action_pattern contains an unsupported mid-string glob.
     """
     pattern = action_pattern.strip()
+    if is_unsupported_glob(pattern):
+        return Unresolved(
+            reason=f"Unsupported mid-string glob pattern in action: '{pattern}'",
+            expression=pattern,
+        )
     if pattern == "*":
         return z3.BoolVal(True)
-    if pattern.endswith(":*"):
-        prefix = pattern[:-1]  # e.g. "s3:"
+    if pattern.endswith("*"):
+        prefix = pattern[:-1]  # e.g. "s3:" or "ec2:Describe"
         return z3.PrefixOf(z3.StringVal(prefix), action_var)
     return action_var == z3.StringVal(pattern)
 
 
-def make_resource_match_expr(resource_var: z3.SeqRef, resource_pattern: str) -> z3.BoolRef:
+def make_resource_match_expr(resource_var: z3.SeqRef, resource_pattern: str) -> Union[z3.BoolRef, Unresolved]:
     """
     Generates a symbolic Z3 String constraint asserting that free String variable resource_var
     matches resource_pattern using Z3 String theory (PrefixOf or equality).
+    Returns Unresolved if resource_pattern contains an unsupported mid-string glob.
     """
     pattern = resource_pattern.strip()
+    if is_unsupported_glob(pattern):
+        return Unresolved(
+            reason=f"Unsupported mid-string glob pattern in resource: '{pattern}'",
+            expression=pattern,
+        )
     if pattern == "*" or pattern == "*/*":
         return z3.BoolVal(True)
     if pattern.endswith("*"):
@@ -56,25 +81,46 @@ def make_statement_match_expr(
     action_var: z3.SeqRef,
     resource_var: z3.SeqRef,
     stmt: IamPolicyStatement,
-) -> z3.BoolRef:
+) -> Union[z3.BoolRef, Unresolved]:
     """
     Encodes an IamPolicyStatement into a symbolic Z3 String expression asserting
     that (action_var, resource_var) is matched by the statement's actions/not_actions and resources/not_resources.
+    Returns Unresolved if any action/resource pattern contains an unsupported mid-string glob.
     """
     if stmt.actions:
-        action_exprs = [make_action_match_expr(action_var, act) for act in stmt.actions]
+        action_exprs = []
+        for act in stmt.actions:
+            expr = make_action_match_expr(action_var, act)
+            if isinstance(expr, Unresolved):
+                return expr
+            action_exprs.append(expr)
         action_match = z3.Or(action_exprs)
     elif stmt.not_actions:
-        not_action_exprs = [make_action_match_expr(action_var, act) for act in stmt.not_actions]
+        not_action_exprs = []
+        for act in stmt.not_actions:
+            expr = make_action_match_expr(action_var, act)
+            if isinstance(expr, Unresolved):
+                return expr
+            not_action_exprs.append(expr)
         action_match = z3.Not(z3.Or(not_action_exprs))
     else:
         action_match = z3.BoolVal(True)
 
     if stmt.resources:
-        resource_exprs = [make_resource_match_expr(resource_var, res) for res in stmt.resources]
+        resource_exprs = []
+        for res in stmt.resources:
+            expr = make_resource_match_expr(resource_var, res)
+            if isinstance(expr, Unresolved):
+                return expr
+            resource_exprs.append(expr)
         resource_match = z3.Or(resource_exprs)
     elif stmt.not_resources:
-        not_resource_exprs = [make_resource_match_expr(resource_var, res) for res in stmt.not_resources]
+        not_resource_exprs = []
+        for res in stmt.not_resources:
+            expr = make_resource_match_expr(resource_var, res)
+            if isinstance(expr, Unresolved):
+                return expr
+            not_resource_exprs.append(expr)
         resource_match = z3.Not(z3.Or(not_resource_exprs))
     else:
         resource_match = z3.BoolVal(True)
@@ -123,6 +169,8 @@ def encode_iam_scope_symbolic(
             continue
 
         stmt_match = make_statement_match_expr(action_var, resource_var, stmt)
+        if isinstance(stmt_match, Unresolved):
+            return stmt_match
 
         if stmt.effect.lower() == "deny":
             deny_exprs.append(stmt_match)
@@ -131,14 +179,14 @@ def encode_iam_scope_symbolic(
             if stmt.actions:
                 has_act_wildcard = any(is_full_wildcard_action(act) for act in stmt.actions)
             elif stmt.not_actions:
-                has_act_wildcard = not any(is_full_wildcard_action(act) for act in stmt.not_actions)
+                has_act_wildcard = not any(act.strip() == "*" for act in stmt.not_actions)
             else:
                 has_act_wildcard = True
 
             if stmt.resources:
                 has_res_wildcard = any(is_full_wildcard_resource(res) for res in stmt.resources)
             elif stmt.not_resources:
-                has_res_wildcard = not any(is_full_wildcard_resource(res) for res in stmt.not_resources)
+                has_res_wildcard = not any(res.strip() == "*" for res in stmt.not_resources)
             else:
                 has_res_wildcard = True
 

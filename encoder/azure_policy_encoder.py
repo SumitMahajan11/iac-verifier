@@ -128,6 +128,8 @@ class AzurePolicyEncoder:
             # Check operators
             if "equals" in cond_dict:
                 target_val = cond_dict["equals"]
+                if isinstance(target_val, Unresolved):
+                    return z3.BoolVal(False), [f"Unresolved target value in policy 'equals' condition: {target_val.reason}"]
                 if val is None:
                     return z3.BoolVal(False), []
                 eq = str(val).strip().lower() == str(target_val).strip().lower()
@@ -135,6 +137,8 @@ class AzurePolicyEncoder:
 
             if "notEquals" in cond_dict or "not_equals" in cond_dict:
                 target_val = cond_dict.get("notEquals") or cond_dict.get("not_equals")
+                if isinstance(target_val, Unresolved):
+                    return z3.BoolVal(False), [f"Unresolved target value in policy 'notEquals' condition: {target_val.reason}"]
                 if val is None:
                     return z3.BoolVal(True), []
                 neq = str(val).strip().lower() != str(target_val).strip().lower()
@@ -142,8 +146,12 @@ class AzurePolicyEncoder:
 
             if "in" in cond_dict:
                 target_list = cond_dict["in"]
+                if isinstance(target_list, Unresolved):
+                    return z3.BoolVal(False), [f"Unresolved target value in policy 'in' condition: {target_list.reason}"]
                 if not isinstance(target_list, list):
                     target_list = [target_list]
+                if any(isinstance(x, Unresolved) for x in target_list):
+                    return z3.BoolVal(False), ["Unresolved item in target list for policy 'in' condition"]
                 if val is None:
                     return z3.BoolVal(False), []
                 val_str = str(val).strip().lower()
@@ -152,8 +160,12 @@ class AzurePolicyEncoder:
 
             if "notIn" in cond_dict or "not_in" in cond_dict:
                 target_list = cond_dict.get("notIn") or cond_dict.get("not_in")
+                if isinstance(target_list, Unresolved):
+                    return z3.BoolVal(False), [f"Unresolved target value in policy 'notIn' condition: {target_list.reason}"]
                 if not isinstance(target_list, list):
                     target_list = [target_list]
+                if any(isinstance(x, Unresolved) for x in target_list):
+                    return z3.BoolVal(False), ["Unresolved item in target list for policy 'notIn' condition"]
                 if val is None:
                     return z3.BoolVal(True), []
                 val_str = str(val).strip().lower()
@@ -161,7 +173,10 @@ class AzurePolicyEncoder:
                 return z3.BoolVal(not in_list), []
 
             if "contains" in cond_dict:
-                target_substr = str(cond_dict["contains"]).strip().lower()
+                target_val = cond_dict["contains"]
+                if isinstance(target_val, Unresolved):
+                    return z3.BoolVal(False), [f"Unresolved target value in policy 'contains' condition: {target_val.reason}"]
+                target_substr = str(target_val).strip().lower()
                 if val is None:
                     return z3.BoolVal(False), []
                 if isinstance(val, list):
@@ -171,7 +186,10 @@ class AzurePolicyEncoder:
                 return z3.BoolVal(val_contains), []
 
             if "exists" in cond_dict:
-                should_exist = bool(cond_dict["exists"])
+                target_val = cond_dict["exists"]
+                if isinstance(target_val, Unresolved):
+                    return z3.BoolVal(False), [f"Unresolved target value in policy 'exists' condition: {target_val.reason}"]
+                should_exist = bool(target_val)
                 exists = val is not None
                 return z3.BoolVal(exists == should_exist), []
 

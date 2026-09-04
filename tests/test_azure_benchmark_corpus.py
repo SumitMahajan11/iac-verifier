@@ -30,8 +30,9 @@ def test_azure_benchmark_corpus_precision_recall():
     print(f"Recall: {metrics['recall']}")
     print(f"F1 Score: {metrics['f1_score']}")
 
-    assert results["total_cases"] == 28
-    assert results["evaluated_count"] == 28
+    assert results["total_cases"] == 32
+    assert results["evaluated_count"] == 32
+    assert results["unresolvable_metrics"]["correct_unresolvable"] == 5
     assert metrics["false_positives"] == 0
     assert metrics["false_negatives"] == 0
     assert metrics["precision"] == 1.0
@@ -55,6 +56,6 @@ def test_azure_benchmark_corpus_categories_breakdown():
     assert categories["NSG_OVER_EXPOSURE"] == 7
     assert categories["RBAC_PRIVILEGE_ESCALATION"] == 7
     assert categories["SCOPE_INHERITANCE"] == 6
-    assert categories["AZURE_GOVERNANCE_POLICY_VIOLATION"] == 8
+    assert categories["AZURE_GOVERNANCE_POLICY_VIOLATION"] == 12
     assert formats["HCL"] == 15
-    assert formats["ARM"] == 13
+    assert formats["ARM"] == 17

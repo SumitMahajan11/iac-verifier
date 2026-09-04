@@ -29,7 +29,7 @@ def run_differential_check(test_cases: List[Dict[str, Any]]) -> Tuple[bool, List
     Returns (success_flag, error_messages).
     """
     errors = []
-    engine = VerificationEngine()
+    engine = VerificationEngine(use_cache=False)
     
     for case in test_cases:
         if case.get("ambiguity", {}).get("is_ambiguous", False):
