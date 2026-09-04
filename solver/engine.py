@@ -42,6 +42,10 @@ from parser.graph import (
 )
 from encoder.azure_nsg_encoder import AzureNSGEncoder
 from encoder.azure_policy_encoder import AzurePolicyEncoder
+from encoder.gcp_firewall_encoder import encode_gcp_firewall
+from encoder.gcp_iam_encoder import encode_gcp_iam
+from graph.azure_trust_graph import build_azure_trust_graph
+from graph.gcp_trust_graph import build_gcp_trust_graph
 
 
 
@@ -261,8 +265,15 @@ class VerificationEngine:
                 if res:
                     results.append(res)
 
+        # Detect provider and build appropriate trust graph
+        has_aws = any(r.type.startswith("aws_") for r in graph.resources.values())
+        has_azure = any(r.type.startswith("azurerm_") or r.type == "Microsoft.Authorization/policyAssignments" for r in graph.resources.values())
+        has_gcp = any(r.type.startswith("google_") for r in graph.resources.values())
+
+        trust_graph_mock = getattr(graph, "trust_graph", None)
+        
         # Check Pattern 5: Privilege Escalation Reachability (AWS IAM & Azure RBAC)
-        if any(r.type in ("aws_iam_role", "azurerm_role_assignment") for r in graph.resources.values()) or getattr(graph, "trust_graph", None):
+        if any(r.type in ("aws_iam_role", "azurerm_role_assignment", "google_project_iam_binding") for r in graph.resources.values()) or trust_graph_mock:
             res = None
             cache_key = None
             if self.cache:
