@@ -24,5 +24,16 @@
     "format": "HCL",
     "expected_engine_state": "UNSAT",
     "ambiguity": { "is_ambiguous": false, "reason": "Defines a permissive role but it is never assigned, so there is no actual escalation path." }
+  },
+  {
+    "corpus": "terragoat",
+    "case_id": "azure_rw_3",
+    "file": "fixtures/corpora/terragoat/terraform/azure/policies.tf",
+    "resource_id": "azurerm_policy_assignment.example",
+    "category": "GOVERNANCE_POLICY_VIOLATION",
+    "vulnerability_class": "AZURE_GOVERNANCE_POLICY_VIOLATION",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false, "reason": "Policy effect is audit, so non-compliant deployments produce audit logs rather than active blocking violations." }
   }
 ]

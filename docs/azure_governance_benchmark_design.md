@@ -10,7 +10,7 @@ This document specifies the technical design for the next planned phase of the Z
 Currently, the engine provides high-precision SMT verification for AWS (IAM escalation, SGs) and Azure (NSG rule precedence, RBAC trust reachability) across 195 tests with 90% code coverage. However, the existing Tier 1 ground-truth benchmark (27 cases with 1.0 precision/recall) is exclusively AWS/HCL-focused.
 
 This phase achieves two core objectives:
-1. **Ground-Truth Benchmark Corpus Expansion for Azure/ARM**: A two-part ground-truth dataset matching the rigor of the AWS corpus. This includes a 28-case synthetic corpus spanning both Terraform HCL and native ARM JSON formats across 4 distinct vulnerability categories, and a real-world corpus manually sourced from Terragoat with independent manual ground truth labeling. Both achieve 1.0 precision and 1.0 recall.
+1. **Ground-Truth Benchmark Corpus Expansion for Azure/ARM**: A two-part ground-truth dataset matching the rigor of the AWS corpus. This includes a 32-case synthetic corpus spanning both Terraform HCL and native ARM JSON formats across 4 distinct vulnerability categories (including 5 fail-closed `UNRESOLVABLE` dynamic function tests), and a real-world corpus manually sourced from Terragoat with independent manual ground truth labeling (3 cases: networking.tf, roles.tf, policies.tf; 1.0 Precision, 1.0 Recall). Scope inheritance misconfigurations (management group overrides/exemptions) have zero real-world open-source coverage in public vulnerable repos and are documented as a permanent corpus limitation.
 2. **Azure Governance Rule Set Integration**: Symbolic SMT encoding of Azure Policy definitions and assignments (`azurerm_policy_assignment`, `azurerm_policy_definition`, `azurerm_management_group_policy_assignment`, ARM `Microsoft.Authorization/policyAssignments`), integrated cleanly into `solver/engine.py` and connected with the 4-level Azure scope hierarchy in `graph/azure_trust_graph.py`.
 
 ---
@@ -91,7 +91,7 @@ flowchart TD
 
 #### 1. Ground-Truth Benchmark Corpus for Azure/ARM (Synthetic & Real-World)
 
-To provide a credible, verifiable precision/recall claim (target: 1.0 precision, 1.0 recall) equivalent in rigor to the 28-case AWS corpus, the Azure ground-truth corpus consists of **28 synthetic real-world-like test cases** split across Terraform HCL and native ARM JSON, alongside a **real-world corpus** composed of templates from Terragoat (independent of tool output). Both score 1.0 precision/recall side by side.
+To provide a credible, verifiable precision/recall claim (target: 1.0 precision, 1.0 recall) equivalent in rigor to the 28-case AWS corpus, the Azure ground-truth corpus consists of **32 synthetic real-world-like test cases** split across Terraform HCL and native ARM JSON, alongside a **real-world corpus** composed of templates from Terragoat (3 cases: networking.tf, roles.tf, policies.tf, with independent manual ground truth labeling). Both score 1.0 precision/recall side by side. Scope inheritance misconfigurations (management group overrides/exemptions) have zero real-world open-source coverage in public vulnerable repos (e.g. Terragoat, Sadcloud, AzureGoat) and represent a documented permanent corpus limitation.
 
 ##### Category Breakdown & Case Allocation
 
@@ -100,8 +100,8 @@ To provide a credible, verifiable precision/recall claim (target: 1.0 precision,
 | **1. NSG Over-Exposure** | **7** | Open sensitive ports (SSH 22, RDP 3389, DB 5432, multi-port) from `*` or `Internet` to private subnets; priority shadowing (`100 Deny` vs `200 Allow`); VNet/Subnet bound safe configurations. | HCL & ARM JSON | 4 SAT, 3 UNSAT |
 | **2. RBAC Privilege Escalation** | **7** | Custom role definition with `Microsoft.Authorization/*/write` or `*` actions; managed identity (VM / Web App) with `Owner`/`Contributor` assignment; User Access Administrator; cross-subscription role assignment. | HCL & ARM JSON | 5 SAT, 2 UNSAT |
 | **3. Scope Inheritance & Isolation** | **6** | Management Group root scope (`mg-root`) subsuming underlying subscriptions/workloads; subscription inheritance; Resource Group scope isolation (`rg-finance` vs `rg-analytics`); unassigned policy isolation. | HCL & ARM JSON | 3 SAT, 3 UNSAT |
-| **4. Azure Policy Guardrails** | **8** | Azure Policy `Deny` enforcement (Public IP restriction, unauthorized location/SKU, HTTPS enforcement, nested `allOf`/`anyOf`); Audit effect safe handling; compliant locations; dynamic expression fail-closed `UNRESOLVABLE` handling (`resourceGroup().location`). | HCL & ARM JSON | 4 SAT, 3 UNSAT, 1 UNRESOLVABLE |
-| **TOTAL** | **28** | **Rigorous, multi-format Azure security verification suite** | **HCL (15) / ARM (13)** | **16 SAT, 11 UNSAT, 1 UNRESOLVABLE** |
+| **4. Azure Policy Guardrails** | **12** | Azure Policy `Deny` enforcement (Public IP restriction, unauthorized location/SKU, HTTPS enforcement, nested `allOf`/`anyOf`); Audit effect safe handling; compliant locations; dynamic expression fail-closed `UNRESOLVABLE` handling (`subscription()`, unresolved params, `resourceId()`, external defender data). | HCL & ARM JSON | 4 SAT, 3 UNSAT, 5 UNRESOLVABLE |
+| **TOTAL** | **32** | **Rigorous, multi-format Azure security verification suite** | **HCL (15) / ARM (17)** | **16 SAT, 11 UNSAT, 5 UNRESOLVABLE** |
 
 ##### Ground-Truth Case Schema Specification (`benchmark/azure_ground_truth.json`)
 
