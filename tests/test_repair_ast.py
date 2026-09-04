@@ -183,3 +183,17 @@ def test_end_to_end_auto_repair_reverification(tmp_path):
     assert result.patch is not None
     assert "-    from_port   = 22" in result.patch
 
+
+def test_hcl2_grammar_drift_detection():
+    """Drift Detection: Ensures ASTRepairEngine.HCL2_GRAMMAR matches installed python-hcl2 grammar rules."""
+    upstream_grammar = getattr(hcl2, "LARK_GRAMMAR", None)
+    if upstream_grammar is None and hasattr(hcl2, "parser"):
+        upstream_grammar = getattr(hcl2.parser, "LARK_GRAMMAR", None)
+
+    if upstream_grammar and isinstance(upstream_grammar, str):
+        # Normalize whitespace for comparison
+        embedded_norm = "".join(ASTRepairEngine.HCL2_GRAMMAR.split())
+        upstream_norm = "".join(upstream_grammar.split())
+        assert embedded_norm == upstream_norm, "ASTRepairEngine.HCL2_GRAMMAR has drifted from installed python-hcl2 LARK_GRAMMAR!"
+
+

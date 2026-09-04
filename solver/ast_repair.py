@@ -65,8 +65,10 @@ class ASTRepairEngine:
     Format-preserving HCL auto-repair engine based on Lark CST source span metadata.
     """
 
-    HCL2_GRAMMAR = r"""
-start : _NEW_LINE_OR_COMMENT* body _NEW_LINE_OR_COMMENT?
+    # ROOT CAUSE: python-hcl2 does not expose a stable public parser API across Python versions
+    # and OS platforms (varying between module/class/instance attributes and pickle binary caches).
+    # HCL2_GRAMMAR provides a deterministic, architecture-independent Lark EBNF grammar fallback.
+    HCL2_GRAMMAR = r"""start : _NEW_LINE_OR_COMMENT* body _NEW_LINE_OR_COMMENT?
 body : (attribute | block _NEW_LINE_OR_COMMENT+ )*
 attribute : (identifier) "=" expression _NEW_LINE_OR_COMMENT*
 block : identifier (identifier | STRING_LIT)* "{" _NEW_LINE_OR_COMMENT* body "}"
@@ -105,7 +107,7 @@ expr_term : "(" _NEW_LINE_OR_COMMENT* expression _NEW_LINE_OR_COMMENT? ")"
 
 
 STRING_LIT : "\"" (STRING_CHARS | INTERPOLATION)* "\""
-STRING_CHARS : /(?:(?!\${)([^"\\]|\\.))+/+
+STRING_CHARS : /(?:(?!\${)([^"\\]|\\.))+/+ // any character except '"" unless inside a interpolation string
 NESTED_INTERPOLATION : "${" /[^}]+/ "}"
 NESTED_QUOTES : "\"" /[^"]*/ "\""
 INTERPOLATION : "${" (/(?:(?!\${)([^}"]))+/ | NESTED_QUOTES | NESTED_INTERPOLATION)+ "}"
