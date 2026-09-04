@@ -131,11 +131,9 @@ class ASTRepairEngine:
 
         if hasattr(tree, "data") and tree.data == "block":
             children = getattr(tree, "children", [])
-            if len(children) >= 3:
-                id_token_val = _get_val(children[0]).strip().lower()
-                rtype = _get_val(children[1]).strip()
-                rname = _get_val(children[2]).strip()
-                if id_token_val == "resource" and rtype == res_type_clean and rname == res_name_clean:
+            tokens = [_get_val(c).strip().strip('"\'') for c in children if _get_val(c).strip()]
+            if len(tokens) >= 3:
+                if tokens[0].lower() == "resource" and tokens[1] == res_type_clean and tokens[2] == res_name_clean:
                     return tree
 
         for child in getattr(tree, "children", []):
@@ -170,13 +168,15 @@ class ASTRepairEngine:
 
             # Case 1: Standalone block (ingress { ... }, egress { ... }, security_rule { ... })
             if child.data == "block":
-                block_id = _get_val(child.children[0]).strip().lower() if len(child.children) > 0 else ""
+                tokens = [_get_val(c).strip().strip('"\'') for c in child.children if _get_val(c).strip()]
+                block_id = tokens[0].lower() if len(tokens) > 0 else ""
                 if block_id in ("ingress", "egress", "statement", "security_rule", "rule", "rules", "custom_rules"):
                     statement_nodes.append(child)
 
             # Case 2 & 3: Attributes (ingress = [...], policy = jsonencode(...))
             elif child.data == "attribute":
-                attr_id = _get_val(child.children[0]).strip().lower() if len(child.children) > 0 else ""
+                tokens = [_get_val(c).strip().strip('"\'') for c in child.children if _get_val(c).strip()]
+                attr_id = tokens[0].lower() if len(tokens) > 0 else ""
 
                 # Ingress / Egress list attribute
                 if attr_id in ("ingress", "egress", "security_rule", "rules", "security_rules"):
@@ -192,7 +192,8 @@ class ASTRepairEngine:
                     expr_term = next((c for c in child.children if hasattr(c, "data") and c.data == "expr_term"), None)
                     if expr_term and hasattr(expr_term, "children") and len(expr_term.children) > 0 and getattr(expr_term.children[0], "data", None) == "function_call":
                         fn_call = expr_term.children[0]
-                        fn_id = _get_val(fn_call.children[0]).strip().lower() if len(fn_call.children) > 0 else ""
+                        fn_tokens = [_get_val(c).strip().strip('"\'') for c in fn_call.children if _get_val(c).strip()]
+                        fn_id = fn_tokens[0].lower() if len(fn_tokens) > 0 else ""
                         if fn_id == "jsonencode":
                             args = next((c for c in fn_call.children if hasattr(c, "data") and c.data == "arguments"), None)
                             if args and hasattr(args, "children") and len(args.children) > 0:
@@ -201,8 +202,8 @@ class ASTRepairEngine:
                                     obj_node = arg_expr.children[0]
                                     for elem in obj_node.children:
                                         if getattr(elem, "data", None) == "object_elem":
-                                            key_node = elem.children[0]
-                                            elem_id = _get_val(key_node).strip().lower()
+                                            elem_tokens = [_get_val(c).strip().strip('"\'') for c in elem.children if _get_val(c).strip()]
+                                            elem_id = elem_tokens[0].lower() if len(elem_tokens) > 0 else ""
                                             if elem_id == "statement":
                                                 stmt_expr = next((c for c in elem.children if hasattr(c, "data") and c.data == "expr_term"), None)
                                                 if stmt_expr and hasattr(stmt_expr, "children") and len(stmt_expr.children) > 0 and getattr(stmt_expr.children[0], "data", None) == "tuple":
