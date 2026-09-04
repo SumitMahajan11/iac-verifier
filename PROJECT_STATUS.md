@@ -16,12 +16,12 @@
 - [x] Phase 8: CLI Interface & Integration
 - [x] Phase 9: GitHub Action CI/CD Integration
 - [x] Phase 10: ARM Native Template Support (`parser/arm_parser.py`) [JSON Template Extraction, Variable/Parameter Resolution, Dynamic Expression Fail-Closed Gating, Cross-Format RBAC/NSG Equivalence]
-- [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`) [Azure Corpus: 28 total JSON entries / 28 evaluated cases; 27 binary decidable (16 SAT, 11 UNSAT) + 1 UNRESOLVABLE; 1.0 Precision, 1.0 Recall, 100% Unresolvable Accuracy]
+- [x] Phase 11: Azure Governance Rule Set Integration & Benchmark Corpus (`encoder/azure_policy_encoder.py`, `fixtures/phase11/azure_ground_truth.json`, `benchmark/azure_real_world_ground_truth.json`) [Azure Synthetic Corpus: 28 total JSON entries / 28 evaluated cases; 27 binary decidable (16 SAT, 11 UNSAT) + 1 UNRESOLVABLE; 1.0 Precision, 1.0 Recall, 100% Unresolvable Accuracy | Azure Real-World Corpus: 2 total entries / 2 evaluated cases; 2 binary decidable (1 SAT, 1 UNSAT); 1.0 Precision, 1.0 Recall]
 - [x] Tier 3 Part A: Compositional Incremental Verification (`verify_incremental` & subgraph cache invalidation)
 - [x] Tier 3 Part B: Kubernetes Validating Admission Webhook (Live `kind` cluster `kubectl apply` verification)
 - [x] Z3 Performance Benchmarking: SMT Solver Overhead & Scaling Performance Baseline (`docs/z3_performance_report.md`)
 
-*Note: AWS corpus comprises 28 total file entries (27 evaluated cases + 1 ambiguous case excluded per §4 spec). Azure corpus comprises 28 total file entries (all 28 evaluated: 27 binary decidable + 1 unresolvable case). Phase 11 precision and recall metrics reflect evaluation on an author-written synthetic ground-truth corpus designed for specification verification, distinct from third-party public benchmark suites (e.g. Terragoat/Sadcloud).
+*Note: AWS corpus comprises 28 total file entries (27 evaluated cases + 1 ambiguous case excluded per §4 spec). Azure synthetic corpus comprises 28 total file entries (all 28 evaluated: 27 binary decidable + 1 unresolvable case). Azure real-world corpus comprises 2 case templates from Terragoat. Phase 11 precision and recall metrics reflect evaluation on both an author-written synthetic ground-truth corpus designed for specification verification, and a real-world corpus (Terragoat) for external validation, measuring different things but both achieving 1.0 precision and recall.
 
 ## Test Suite Status
 - **Pass Count:** 206 passed in ~6.8s

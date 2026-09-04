@@ -1,0 +1,28 @@
+[
+  {
+    "corpus": "terragoat",
+    "case_id": "azure_rw_1",
+    "file": "fixtures/corpora/terragoat/terraform/azure/networking.tf",
+    "resource_id": "azurerm_network_security_group.bad_sg",
+    "category": "NSG_OVER_EXPOSURE",
+    "vulnerability_class": "AZURE_NSG_EXPOSURE",
+    "format": "HCL",
+    "expected_engine_state": "SAT",
+    "expected_witness": {
+        "port": 22,
+        "cidr": "*"
+    },
+    "ambiguity": { "is_ambiguous": false }
+  },
+  {
+    "corpus": "terragoat",
+    "case_id": "azure_rw_2",
+    "file": "fixtures/corpora/terragoat/terraform/azure/roles.tf",
+    "resource_id": "azurerm_role_definition.example",
+    "category": "RBAC_PRIVILEGE_ESCALATION",
+    "vulnerability_class": "AZURE_RBAC_ESCALATION",
+    "format": "HCL",
+    "expected_engine_state": "UNSAT",
+    "ambiguity": { "is_ambiguous": false, "reason": "Defines a permissive role but it is never assigned, so there is no actual escalation path." }
+  }
+]

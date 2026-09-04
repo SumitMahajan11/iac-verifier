@@ -8,6 +8,7 @@ Recall, F1-Score, and comparative differential stats against baseline static ana
 
 import json
 import os
+import sys
 from typing import Dict, Any, List, Tuple
 
 from parser.hcl_parser import parse_file, build_graph
@@ -204,13 +205,28 @@ class BenchmarkHarness:
 
 
 if __name__ == "__main__":
-    gt_path = os.path.join(os.path.dirname(__file__), "ground_truth.json")
-    if os.path.exists(gt_path):
-        harness = BenchmarkHarness(gt_path)
-        metrics = harness.evaluate()
-        out_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "harness_output.json")
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(metrics, f, indent=2)
-        print(json.dumps(metrics, indent=2))
+    gt_paths = []
+    if len(sys.argv) > 1:
+        gt_paths = [sys.argv[1]]
     else:
-        print(f"Ground truth dataset not found at {gt_path}")
+        gt_paths = [
+            os.path.join(os.path.dirname(__file__), "ground_truth.json"),
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "fixtures", "phase11", "azure_ground_truth.json")),
+            os.path.join(os.path.dirname(__file__), "azure_real_world_ground_truth.json")
+        ]
+
+    for gt_path in gt_paths:
+        if os.path.exists(gt_path):
+            print(f"\\n=== Evaluating {os.path.basename(gt_path)} ===")
+            harness = BenchmarkHarness(gt_path)
+            try:
+                metrics = harness.evaluate()
+                out_name = f"harness_output_{os.path.splitext(os.path.basename(gt_path))[0]}.json"
+                out_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), out_name)
+                with open(out_path, "w", encoding="utf-8") as f:
+                    json.dump(metrics, f, indent=2)
+                print(json.dumps(metrics, indent=2))
+            except Exception as e:
+                print(f"Error evaluating {gt_path}: {e}")
+        else:
+            print(f"Ground truth dataset not found at {gt_path}")
