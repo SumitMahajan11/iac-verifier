@@ -133,7 +133,14 @@ class ASTRepairEngine:
         for node in nodes_to_delete:
             lrange = _get_node_line_range(node)
             if lrange:
-                node_ranges.append((node, lrange))
+                start_l, end_l = lrange
+                # If node is a block (e.g. ingress { ... }), check if the closing brace is on next line when end_l doesn't already contain '}'
+                if getattr(node, "data", None) == "block":
+                    curr_line = lines[end_l - 1].strip() if 0 <= end_l - 1 < len(lines) else ""
+                    if "}" not in curr_line:
+                        if end_l < len(lines) and lines[end_l].strip().startswith("}"):
+                            end_l += 1
+                node_ranges.append((node, (start_l, end_l)))
 
         if not node_ranges:
             logging.warning("ASTRepairEngine: Could not extract line ranges for target nodes.")
