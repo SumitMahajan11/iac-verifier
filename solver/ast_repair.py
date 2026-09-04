@@ -205,6 +205,19 @@ class ASTRepairEngine:
         return None
 
     @staticmethod
+    def _unwrap_node(node: Any) -> Any:
+        """Recursively unwraps statement CST nodes until reaching block or attribute tree node."""
+        if not hasattr(node, "data"):
+            return node
+        if node.data == "statement" and hasattr(node, "children"):
+            for sub in node.children:
+                if hasattr(sub, "data"):
+                    unwrapped = ASTRepairEngine._unwrap_node(sub)
+                    if hasattr(unwrapped, "data") and unwrapped.data in ("block", "attribute"):
+                        return unwrapped
+        return node
+
+    @staticmethod
     def _collect_statement_nodes(res_body: Any) -> List[Any]:
         """
         Collects all repairable statement nodes in structural order:
@@ -215,27 +228,21 @@ class ASTRepairEngine:
         statement_nodes = []
 
         for child in getattr(res_body, "children", []):
+            child = ASTRepairEngine._unwrap_node(child)
             if not hasattr(child, "data"):
                 continue
-
-            # Unwrap statement wrapper node if Lark CST wraps block/attribute in a statement node
-            if child.data == "statement" and hasattr(child, "children"):
-                for sub in child.children:
-                    if hasattr(sub, "data") and sub.data in ("block", "attribute"):
-                        child = sub
-                        break
 
             # Case 1: Standalone block (ingress { ... }, egress { ... }, security_rule { ... })
             if child.data == "block":
                 tokens = [_get_val(c).strip().strip('"\'') for c in child.children if _get_val(c).strip()]
-                block_id = tokens[0].lower() if len(tokens) > 0 else ""
-                if block_id in ("ingress", "egress", "statement", "security_rule", "rule", "rules", "custom_rules"):
+                block_id = next((t.lower() for t in tokens[:3] if t.lower() in ("ingress", "egress", "statement", "security_rule", "rule", "rules", "custom_rules")), "")
+                if block_id:
                     statement_nodes.append(child)
 
             # Case 2 & 3: Attributes (ingress = [...], policy = jsonencode(...))
             elif child.data == "attribute":
                 tokens = [_get_val(c).strip().strip('"\'') for c in child.children if _get_val(c).strip()]
-                attr_id = tokens[0].lower() if len(tokens) > 0 else ""
+                attr_id = next((t.lower() for t in tokens[:3] if t.lower() in ("ingress", "egress", "security_rule", "rules", "security_rules", "policy", "inline_policy")), "")
 
                 # Ingress / Egress list attribute
                 if attr_id in ("ingress", "egress", "security_rule", "rules", "security_rules"):
@@ -252,7 +259,7 @@ class ASTRepairEngine:
                     if expr_term and hasattr(expr_term, "children") and len(expr_term.children) > 0 and getattr(expr_term.children[0], "data", None) == "function_call":
                         fn_call = expr_term.children[0]
                         fn_tokens = [_get_val(c).strip().strip('"\'') for c in fn_call.children if _get_val(c).strip()]
-                        fn_id = fn_tokens[0].lower() if len(fn_tokens) > 0 else ""
+                        fn_id = next((t.lower() for t in fn_tokens[:3] if t.lower() == "jsonencode"), "")
                         if fn_id == "jsonencode":
                             args = next((c for c in fn_call.children if hasattr(c, "data") and c.data == "arguments"), None)
                             if args and hasattr(args, "children") and len(args.children) > 0:
@@ -262,7 +269,7 @@ class ASTRepairEngine:
                                     for elem in obj_node.children:
                                         if getattr(elem, "data", None) == "object_elem":
                                             elem_tokens = [_get_val(c).strip().strip('"\'') for c in elem.children if _get_val(c).strip()]
-                                            elem_id = elem_tokens[0].lower() if len(elem_tokens) > 0 else ""
+                                            elem_id = next((t.lower() for t in elem_tokens[:3] if t.lower() == "statement"), "")
                                             if elem_id == "statement":
                                                 stmt_expr = next((c for c in elem.children if hasattr(c, "data") and c.data == "expr_term"), None)
                                                 if stmt_expr and hasattr(stmt_expr, "children") and len(stmt_expr.children) > 0 and getattr(stmt_expr.children[0], "data", None) == "tuple":
