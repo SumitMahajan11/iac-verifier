@@ -67,34 +67,37 @@ class ASTRepairEngine:
 
     @staticmethod
     def _get_lark_parser():
-        import hcl2.parser
-
-        # 1. Check Hcl2 class attributes or instance
-        hcl2_cls = getattr(hcl2.parser, "Hcl2", None)
-        if hcl2_cls is not None:
-            p = getattr(hcl2_cls, "lark_parser", None) or getattr(hcl2_cls, "parser", None)
-            if p is not None:
-                return p
-            try:
-                inst = hcl2_cls()
-                p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
-                if p is not None:
-                    return p
-            except Exception:
-                pass
-
-        # 2. Check hcl2 instance attribute
-        hcl2_inst = getattr(hcl2.parser, "hcl2", None)
-        if hcl2_inst is not None:
+        # 1. Try importing pre-instantiated hcl2 parser from hcl2.parser
+        try:
+            from hcl2.parser import hcl2 as hcl2_inst
             p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
             if p is not None:
                 return p
+        except Exception:
+            pass
+
+        # 2. Try importing Hcl2 class from hcl2.parser
+        try:
+            from hcl2.parser import Hcl2
+            p = getattr(Hcl2, "lark_parser", None) or getattr(Hcl2, "parser", None)
+            if p is not None:
+                return p
+            inst = Hcl2()
+            p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
+            if p is not None:
+                return p
+        except Exception:
+            pass
 
         # 3. Direct instantiation from LARK_GRAMMAR
-        grammar = getattr(hcl2.parser, "LARK_GRAMMAR", None)
-        if grammar is not None:
-            from lark import Lark
-            return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
+        try:
+            import hcl2.parser
+            grammar = getattr(hcl2.parser, "LARK_GRAMMAR", None)
+            if grammar is not None:
+                from lark import Lark
+                return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
+        except Exception:
+            pass
 
         raise RuntimeError("Unable to resolve Lark parser from hcl2 package")
 
@@ -141,14 +144,12 @@ class ASTRepairEngine:
             tree, target_resource_type, target_resource_name
         )
         if not resource_block:
-            import sys
-            sys.stderr.write(f"DEBUG_AST: Resource block '{target_resource_type}.{target_resource_name}' NOT found in CST.\n")
+            logging.warning(f"ASTRepairEngine: Resource block '{target_resource_type}.{target_resource_name}' not found in CST.")
             return hcl_code
 
         resource_body = ASTRepairEngine._find_body(resource_block)
         if not resource_body:
-            import sys
-            sys.stderr.write(f"DEBUG_AST: Resource body for '{target_resource_type}.{target_resource_name}' NOT found in CST.\n")
+            logging.warning(f"ASTRepairEngine: Resource body for '{target_resource_type}.{target_resource_name}' not found in CST.")
             return hcl_code
 
         # Collect all repairable candidate statement/rule nodes in order
@@ -161,8 +162,7 @@ class ASTRepairEngine:
                 nodes_to_delete.append(candidates[idx])
 
         if not nodes_to_delete:
-            import sys
-            sys.stderr.write(f"DEBUG_AST: Target statement indices {deleted_statement_indices} yielded no candidate nodes (len candidates: {len(candidates)}).\n")
+            logging.warning(f"ASTRepairEngine: Target statement indices {deleted_statement_indices} yielded no candidate nodes (candidates count: {len(candidates)}).")
             return hcl_code
 
         # Map nodes to their line ranges
@@ -180,7 +180,7 @@ class ASTRepairEngine:
                 node_ranges.append((node, (start_l, end_l)))
 
         if not node_ranges:
-            logging.warning("ASTRepairEngine: Could not extract line ranges for target nodes.")
+            logging.warning(f"ASTRepairEngine: Could not extract line ranges for target nodes {nodes_to_delete}.")
             return hcl_code
 
         # Sort nodes to delete in reverse line order to preserve line indices during deletion
