@@ -9,7 +9,7 @@ without mangling comments, indentation, or sibling attributes.
 
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import hcl2
 
 
@@ -25,6 +25,36 @@ def _get_val(node: Any) -> str:
         parts = [_get_val(c) for c in node.children if c is not None]
         return "".join(p for p in parts if p).strip('"\'')
     return ""
+
+
+def _get_node_line_range(node: Any) -> Optional[Tuple[int, int]]:
+    """
+    Returns 1-indexed (start_line, end_line) for a Lark Tree or Token node.
+    Checks tree metadata first, falling back to leaf token line scanning for cross-platform robustness.
+    """
+    if node is None:
+        return None
+
+    if hasattr(node, "meta") and hasattr(node.meta, "line") and hasattr(node.meta, "end_line"):
+        if node.meta.line is not None and node.meta.end_line is not None:
+            return (node.meta.line, node.meta.end_line)
+
+    lines: List[int] = []
+
+    def _scan(n: Any):
+        if hasattr(n, "line") and n.line is not None:
+            lines.append(n.line)
+            end = getattr(n, "end_line", n.line) or n.line
+            lines.append(end)
+        if hasattr(n, "children"):
+            for c in getattr(n, "children", []):
+                _scan(c)
+
+    _scan(node)
+    if lines:
+        return (min(lines), max(lines))
+
+    return None
 
 
 class ASTRepairEngine:
@@ -95,18 +125,24 @@ class ASTRepairEngine:
             logging.warning(f"ASTRepairEngine: Target statement indices {deleted_statement_indices} yielded no candidate nodes.")
             return hcl_code
 
+        # Map nodes to their line ranges
+        node_ranges: List[Tuple[Any, Tuple[int, int]]] = []
+        for node in nodes_to_delete:
+            lrange = _get_node_line_range(node)
+            if lrange:
+                node_ranges.append((node, lrange))
+
+        if not node_ranges:
+            logging.warning("ASTRepairEngine: Could not extract line ranges for target nodes.")
+            return hcl_code
+
         # Sort nodes to delete in reverse line order to preserve line indices during deletion
-        nodes_to_delete.sort(
-            key=lambda n: n.meta.line if hasattr(n, "meta") else -1, reverse=True
-        )
+        node_ranges.sort(key=lambda item: item[1][0], reverse=True)
 
         modified_lines = list(lines)
-        for node in nodes_to_delete:
-            if not hasattr(node, "meta"):
-                continue
-            meta = node.meta
-            start_line = meta.line - 1  # 0-indexed
-            end_line = meta.end_line - 1
+        for node, (start_l, end_l) in node_ranges:
+            start_line = start_l - 1  # 0-indexed
+            end_line = end_l - 1
 
             if 0 <= start_line <= end_line < len(modified_lines):
                 del modified_lines[start_line : end_line + 1]
