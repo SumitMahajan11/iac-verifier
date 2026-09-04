@@ -255,6 +255,51 @@ def test_not_action_deny_service_exclusion_safe():
     assert solver2.check() == z3.sat
 
 
+def test_not_action_deny_verb_prefix_exclusion():
+    """
+    Test fixture where NotAction uses a VERB-LEVEL prefix wildcard ('ec2:Describe*'):
+    Statement 1: Allow Action "*" on Resource "*"
+    Statement 2: Deny NotAction ["ec2:Describe*"] on Resource "*"
+
+    - ec2:DescribeInstances: matches NotAction 'ec2:Describe*' -> EXCLUDED from Deny -> SAT (Allowed).
+    - ec2:RunInstances: does NOT match NotAction 'ec2:Describe*' -> NOT excluded from Deny -> Deny Active -> UNSAT (Blocked).
+    - iam:CreateUser: does NOT match NotAction 'ec2:Describe*' -> NOT excluded from Deny -> Deny Active -> UNSAT (Blocked).
+    """
+    stmts = [
+        IamPolicyStatement(
+            effect="Allow",
+            actions=["*"],
+            resources=["*"],
+        ),
+        IamPolicyStatement(
+            effect="Deny",
+            not_actions=["ec2:Describe*"],
+            resources=["*"],
+        ),
+    ]
+    res = encode_iam_scope_symbolic(stmts, scope_id="not_action_verb_deny_test")
+    assert not isinstance(res, Unresolved)
+    act_var, res_var, unsafe_expr = res
+
+    # 1. ec2:DescribeInstances matches ec2:Describe* -> Excluded from Deny -> SAT (Allowed)
+    solver1 = z3.Solver()
+    solver1.add(unsafe_expr)
+    solver1.add(act_var == z3.StringVal("ec2:DescribeInstances"))
+    assert solver1.check() == z3.sat
+
+    # 2. ec2:RunInstances does NOT match ec2:Describe* -> Denied -> UNSAT (Blocked)
+    solver2 = z3.Solver()
+    solver2.add(unsafe_expr)
+    solver2.add(act_var == z3.StringVal("ec2:RunInstances"))
+    assert solver2.check() == z3.unsat
+
+    # 3. iam:CreateUser does NOT match ec2:Describe* -> Denied -> UNSAT (Blocked)
+    solver3 = z3.Solver()
+    solver3.add(unsafe_expr)
+    solver3.add(act_var == z3.StringVal("iam:CreateUser"))
+    assert solver3.check() == z3.unsat
+
+
 def test_mid_string_glob_fail_closed_unresolved():
     """
     Verifies that unsupported mid-string glob patterns (e.g. 's3:Get*Object' or '?')
