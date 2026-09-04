@@ -67,44 +67,53 @@ class ASTRepairEngine:
 
     @staticmethod
     def _get_lark_parser():
-        errors = []
+        import sys
+        import hcl2
 
-        # 1. Try importing pre-instantiated hcl2 parser from hcl2.parser
-        try:
-            from hcl2.parser import hcl2 as hcl2_inst
-            p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
-            if p is not None:
-                return p
-            errors.append("hcl2_inst has no lark_parser or parser attribute")
-        except Exception as e:
-            errors.append(f"Step 1 failed: {e}")
+        # 1. Access parser via top-level hcl2 module attribute or sys.modules
+        parser_mod = getattr(hcl2, "parser", None) or sys.modules.get("hcl2.parser")
+        if parser_mod is not None:
+            hcl2_inst = getattr(parser_mod, "hcl2", None)
+            if hcl2_inst is not None:
+                p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
+                if p is not None:
+                    return p
 
-        # 2. Try importing Hcl2 class from hcl2.parser
-        try:
-            from hcl2.parser import Hcl2
-            p = getattr(Hcl2, "lark_parser", None) or getattr(Hcl2, "parser", None)
-            if p is not None:
-                return p
-            inst = Hcl2()
-            p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
-            if p is not None:
-                return p
-            errors.append("Hcl2 class/instance has no lark_parser or parser attribute")
-        except Exception as e:
-            errors.append(f"Step 2 failed: {e}")
+            hcl2_cls = getattr(parser_mod, "Hcl2", None)
+            if hcl2_cls is not None:
+                p = getattr(hcl2_cls, "lark_parser", None) or getattr(hcl2_cls, "parser", None)
+                if p is not None:
+                    return p
+                try:
+                    inst = hcl2_cls()
+                    p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
+                    if p is not None:
+                        return p
+                except Exception:
+                    pass
 
-        # 3. Direct instantiation from LARK_GRAMMAR
-        try:
-            import hcl2.parser
-            grammar = getattr(hcl2.parser, "LARK_GRAMMAR", None)
+            grammar = getattr(parser_mod, "LARK_GRAMMAR", None)
             if grammar is not None:
                 from lark import Lark
                 return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
-            errors.append("hcl2.parser has no LARK_GRAMMAR attribute")
-        except Exception as e:
-            errors.append(f"Step 3 failed: {e}")
 
-        raise RuntimeError(f"Unable to resolve Lark parser from hcl2 package; errors: {'; '.join(errors)}")
+        # 2. Try importing hcl2.parser explicitly
+        try:
+            import hcl2.parser
+            p_mod = hcl2.parser
+            hcl2_inst = getattr(p_mod, "hcl2", None)
+            if hcl2_inst is not None:
+                p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
+                if p is not None:
+                    return p
+            grammar = getattr(p_mod, "LARK_GRAMMAR", None)
+            if grammar is not None:
+                from lark import Lark
+                return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
+        except Exception:
+            pass
+
+        raise RuntimeError("Unable to resolve Lark parser from hcl2 package")
 
     @staticmethod
     def repair_hcl(
