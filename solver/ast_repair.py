@@ -12,6 +12,20 @@ from typing import List, Dict, Any, Optional
 import hcl2
 
 
+def _get_val(node: Any) -> str:
+    """Recursively extracts raw text value from Lark Tree or Token nodes, stripping quotes."""
+    if not node:
+        return ""
+    if isinstance(node, str):
+        return node.strip('"\'')
+    if hasattr(node, "value"):
+        return str(node.value).strip('"\'')
+    if hasattr(node, "children"):
+        parts = [_get_val(c) for c in node.children if c is not None]
+        return "".join(p for p in parts if p).strip('"\'')
+    return ""
+
+
 class ASTRepairEngine:
     """
     Format-preserving HCL auto-repair engine based on Lark CST source span metadata.
@@ -42,7 +56,6 @@ class ASTRepairEngine:
         try:
             tree = hcl2.parser.Hcl2().lark_parser.parse(hcl_code)
         except Exception as err:
-            # Fallback if Lark parsing fails on non-standard HCL
             import logging
             logging.warning(f"ASTRepairEngine: Lark CST parsing failed ({err}); falling back.")
             return hcl_code
@@ -86,7 +99,6 @@ class ASTRepairEngine:
             end_line = meta.end_line - 1
 
             if 0 <= start_line <= end_line < len(modified_lines):
-                # Check for trailing comma on the end line or immediately following line
                 del modified_lines[start_line : end_line + 1]
 
         result = "".join(modified_lines)
@@ -98,31 +110,33 @@ class ASTRepairEngine:
     @staticmethod
     def _find_resource_block(tree: Any, res_type: str, res_name: str) -> Optional[Any]:
         """Locates the Lark Tree block node matching resource type and name."""
+        def _search_body(body_node):
+            for block in getattr(body_node, "children", []):
+                if hasattr(block, "data") and block.data == "block":
+                    children = block.children
+                    if len(children) >= 3:
+                        id_token_val = _get_val(children[0])
+                        rtype = _get_val(children[1])
+                        rname = _get_val(children[2])
+                        if id_token_val == "resource" and rtype == res_type and rname == res_name:
+                            return block
+            return None
+
+        if getattr(tree, "data", None) == "body":
+            res = _search_body(tree)
+            if res:
+                return res
+
         for top_node in getattr(tree, "children", []):
-            if hasattr(top_node, "data") and top_node.data == "body":
-                for block in top_node.children:
-                    if hasattr(block, "data") and block.data == "block":
-                        children = block.children
-                        if len(children) >= 3 and getattr(children[0], "data", None) == "identifier":
-                            id_token = children[0].children[0]
-                            
-                            def get_val(node):
-                                if hasattr(node, "data"):
-                                    if node.data == "string":
-                                        return "".join(
-                                            child.children[0].value 
-                                            for child in node.children 
-                                            if hasattr(child, "data") and child.data == "string_part"
-                                        )
-                                    if node.data in ("string_lit", "identifier"):
-                                        return node.children[0].value.strip('"\'')
-                                    return ""
-                                return node.value.strip('"\'')
-                                
-                            rtype = get_val(children[1])
-                            rname = get_val(children[2])
-                            if id_token.value == "resource" and rtype == res_type and rname == res_name:
-                                return block
+            if hasattr(top_node, "data"):
+                if top_node.data == "body":
+                    res = _search_body(top_node)
+                    if res:
+                        return res
+                elif top_node.data == "start":
+                    res = ASTRepairEngine._find_resource_block(top_node, res_type, res_name)
+                    if res:
+                        return res
         return None
 
     @staticmethod
@@ -149,13 +163,13 @@ class ASTRepairEngine:
 
             # Case 1: Standalone block (ingress { ... }, egress { ... }, security_rule { ... })
             if child.data == "block":
-                block_id = child.children[0].children[0].value
+                block_id = _get_val(child.children[0]) if len(child.children) > 0 else ""
                 if block_id in ("ingress", "egress", "statement", "Statement", "security_rule"):
                     statement_nodes.append(child)
 
             # Case 2 & 3: Attributes (ingress = [...], policy = jsonencode(...))
             elif child.data == "attribute":
-                attr_id = child.children[0].children[0].value
+                attr_id = _get_val(child.children[0]) if len(child.children) > 0 else ""
 
                 # Ingress / Egress list attribute
                 if attr_id in ("ingress", "egress"):
@@ -171,7 +185,7 @@ class ASTRepairEngine:
                     expr_term = next((c for c in child.children if hasattr(c, "data") and c.data == "expr_term"), None)
                     if expr_term and hasattr(expr_term, "children") and len(expr_term.children) > 0 and getattr(expr_term.children[0], "data", None) == "function_call":
                         fn_call = expr_term.children[0]
-                        fn_id = fn_call.children[0].children[0].value
+                        fn_id = _get_val(fn_call.children[0]) if len(fn_call.children) > 0 else ""
                         if fn_id == "jsonencode":
                             args = next((c for c in fn_call.children if hasattr(c, "data") and c.data == "arguments"), None)
                             if args and hasattr(args, "children") and len(args.children) > 0:
@@ -181,19 +195,13 @@ class ASTRepairEngine:
                                     for elem in obj_node.children:
                                         if getattr(elem, "data", None) == "object_elem":
                                             key_node = elem.children[0]
-                                            def get_key_str(node):
-                                                if hasattr(node, "value"):
-                                                    return str(node.value).strip('"\'')
-                                                if hasattr(node, "children") and len(node.children) > 0:
-                                                    return get_key_str(node.children[0])
-                                                return ""
-                                            elem_id = get_key_str(key_node)
+                                            elem_id = _get_val(key_node)
                                             if elem_id in ("Statement", "statement"):
-                                                    stmt_expr = next((c for c in elem.children if hasattr(c, "data") and c.data == "expr_term"), None)
-                                                    if stmt_expr and hasattr(stmt_expr, "children") and len(stmt_expr.children) > 0 and getattr(stmt_expr.children[0], "data", None) == "tuple":
-                                                        tuple_node = stmt_expr.children[0]
-                                                        for stmt_elem in tuple_node.children:
-                                                            if hasattr(stmt_elem, "data") and stmt_elem.data == "expr_term":
-                                                                statement_nodes.append(stmt_elem)
+                                                stmt_expr = next((c for c in elem.children if hasattr(c, "data") and c.data == "expr_term"), None)
+                                                if stmt_expr and hasattr(stmt_expr, "children") and len(stmt_expr.children) > 0 and getattr(stmt_expr.children[0], "data", None) == "tuple":
+                                                    tuple_node = stmt_expr.children[0]
+                                                    for stmt_elem in tuple_node.children:
+                                                        if hasattr(stmt_elem, "data") and stmt_elem.data == "expr_term":
+                                                            statement_nodes.append(stmt_elem)
 
         return statement_nodes
