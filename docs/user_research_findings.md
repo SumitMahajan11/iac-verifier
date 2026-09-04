@@ -91,3 +91,41 @@ Because **Assumption 1** was strongly contradicted, we must translate internal S
 >     principal_id         = azuread_service_principal.internal_app.object_id
 >   }
 > ```
+
+---
+
+## Independent Audit Reconciliation (2026-09-04)
+
+This section is a permanent record of an independent citation-verification and benchmark re-derivation pass. Do not delete.
+
+### Citation Audit
+
+| Citation | Status | Method |
+|---|---|---|
+| `open-policy-agent/opa#6480` | ✅ Confirmed | Browser screenshot |
+| `open-policy-agent/opa#7255` | ✅ Confirmed | Browser screenshot |
+| `open-policy-agent/opa#6714` | ✅ Confirmed | Browser screenshot |
+| `bridgecrewio/checkov#7470`  | ✅ Confirmed | Browser screenshot |
+| `bridgecrewio/checkov#6981`  | ✅ Confirmed | Browser screenshot |
+| `bridgecrewio/checkov#7310`  | ✅ Confirmed | Browser screenshot |
+| `bridgecrewio/checkov#7439`  | ✅ Confirmed | Browser screenshot |
+| `bridgecrewio/checkov#7558`  | ❌ **Fabricated — removed** | Issue does not exist; confirmed via browser |
+
+All surviving citations are browser-confirmed. No pre-`ecb2ef7` git history exists for this file; that gap is permanent and acknowledged.
+
+### AWS Benchmark Re-Derivation
+
+**Final result: 5/5 cases independently matched.** An earlier manual pass recorded case 25 as "open"; that was an error in the re-derivation, not a mislabel. Corrected finding:
+
+> **Case 25 — `aws_security_group.overlapping_security_group`: RESOLVED, no mislabel.**
+>
+> Fixture (`modules/aws/ec2/main.tf` lines 436–453): two ingress rules, CIDRs `162.168.2.0/24` and `162.168.2.0/25`, `from_port = 0` / `to_port = 0` / `protocol = -1`.
+>
+> Engine unsafe predicate (`encoder/sg_encoder.py` line 100):
+> ```python
+> unsafe_formula = z3.And(ip_is_allowed, z3.Not(ip_is_private))
+> ```
+> — `is_port_sensitive(0, 0)` → `True` (lines 31–32: `from_port <= 0 and to_port <= 0`).
+> — `is_cidr_private("162.168.2.0/24")` → `False`: `162.168.2.x` is not in `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, or `127.0.0.0/8` (verified numerically via Python `ipaddress` module).
+>
+> `unsafe_formula` is **SAT** (e.g., `src_ip = 162.168.2.1` satisfies it). The `ground_truth.json` label `SAT` is correct. The engine's exposure definition is a deliberate single gate — four `PRIVATE_RANGES` constants — with no CIDR-overlap semantics. The fixture name ("overlapping") refers to overlapping rule coverage within sadcloud's linter test suite, not to RFC 1918 overlap; the engine correctly ignores that naming distinction. **This case does not contribute an error to the 1.0 precision/recall number.**
