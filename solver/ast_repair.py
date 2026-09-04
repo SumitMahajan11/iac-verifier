@@ -66,6 +66,39 @@ class ASTRepairEngine:
     """
 
     @staticmethod
+    def _get_lark_parser():
+        import hcl2.parser
+
+        # 1. Check Hcl2 class attributes or instance
+        hcl2_cls = getattr(hcl2.parser, "Hcl2", None)
+        if hcl2_cls is not None:
+            p = getattr(hcl2_cls, "lark_parser", None) or getattr(hcl2_cls, "parser", None)
+            if p is not None:
+                return p
+            try:
+                inst = hcl2_cls()
+                p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
+                if p is not None:
+                    return p
+            except Exception:
+                pass
+
+        # 2. Check hcl2 instance attribute
+        hcl2_inst = getattr(hcl2.parser, "hcl2", None)
+        if hcl2_inst is not None:
+            p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
+            if p is not None:
+                return p
+
+        # 3. Direct instantiation from LARK_GRAMMAR
+        grammar = getattr(hcl2.parser, "LARK_GRAMMAR", None)
+        if grammar is not None:
+            from lark import Lark
+            return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
+
+        raise RuntimeError("Unable to resolve Lark parser from hcl2 package")
+
+    @staticmethod
     def repair_hcl(
         hcl_code: str,
         target_resource_type: str,
@@ -95,11 +128,10 @@ class ASTRepairEngine:
             normalized_code += "\n"
 
         try:
-            tree = hcl2.parser.Hcl2().lark_parser.parse(normalized_code)
+            parser = ASTRepairEngine._get_lark_parser()
+            tree = parser.parse(normalized_code)
         except Exception as err:
-            import sys, traceback
-            sys.stderr.write(f"DEBUG_AST: Lark CST parsing failed for '{target_resource_type}.{target_resource_name}': {err}\n")
-            traceback.print_exc(file=sys.stderr)
+            logging.warning(f"ASTRepairEngine: Lark CST parsing failed ({err}); falling back.")
             return hcl_code
 
         lines = normalized_code.splitlines(keepends=True)
