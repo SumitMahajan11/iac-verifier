@@ -67,14 +67,17 @@ class ASTRepairEngine:
 
     @staticmethod
     def _get_lark_parser():
+        errors = []
+
         # 1. Try importing pre-instantiated hcl2 parser from hcl2.parser
         try:
             from hcl2.parser import hcl2 as hcl2_inst
             p = getattr(hcl2_inst, "lark_parser", None) or getattr(hcl2_inst, "parser", None)
             if p is not None:
                 return p
-        except Exception:
-            pass
+            errors.append("hcl2_inst has no lark_parser or parser attribute")
+        except Exception as e:
+            errors.append(f"Step 1 failed: {e}")
 
         # 2. Try importing Hcl2 class from hcl2.parser
         try:
@@ -86,8 +89,9 @@ class ASTRepairEngine:
             p = getattr(inst, "lark_parser", None) or getattr(inst, "parser", None)
             if p is not None:
                 return p
-        except Exception:
-            pass
+            errors.append("Hcl2 class/instance has no lark_parser or parser attribute")
+        except Exception as e:
+            errors.append(f"Step 2 failed: {e}")
 
         # 3. Direct instantiation from LARK_GRAMMAR
         try:
@@ -96,10 +100,11 @@ class ASTRepairEngine:
             if grammar is not None:
                 from lark import Lark
                 return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
-        except Exception:
-            pass
+            errors.append("hcl2.parser has no LARK_GRAMMAR attribute")
+        except Exception as e:
+            errors.append(f"Step 3 failed: {e}")
 
-        raise RuntimeError("Unable to resolve Lark parser from hcl2 package")
+        raise RuntimeError(f"Unable to resolve Lark parser from hcl2 package; errors: {'; '.join(errors)}")
 
     @staticmethod
     def repair_hcl(
