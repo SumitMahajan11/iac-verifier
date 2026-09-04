@@ -1,0 +1,273 @@
+{
+  "reachability_scale": [
+    {
+      "nodes": 10,
+      "k_bound": 5,
+      "prefilter_on": {
+        "median_ms": 2.571,
+        "min_ms": 2.428,
+        "max_ms": 3.02,
+        "raw_runs_ms": [
+          3.02,
+          2.428,
+          2.571
+        ],
+        "nodes_before_prefilter": 10,
+        "edges_before_prefilter": 9,
+        "nodes_encoded_to_z3": 6,
+        "edges_encoded_to_z3": 5,
+        "assertions": 1,
+        "peak_mb": 0.013,
+        "status": "unsat"
+      },
+      "prefilter_off": {
+        "median_ms": 13.82,
+        "min_ms": 10.471,
+        "max_ms": 21.4,
+        "raw_runs_ms": [
+          13.82,
+          21.4,
+          10.471
+        ],
+        "nodes_before_prefilter": 10,
+        "edges_before_prefilter": 9,
+        "nodes_encoded_to_z3": 10,
+        "edges_encoded_to_z3": 9,
+        "assertions": 1,
+        "peak_mb": 0.01,
+        "status": "unsat"
+      },
+      "speedup_x": 5.38
+    },
+    {
+      "nodes": 50,
+      "k_bound": 5,
+      "prefilter_on": {
+        "median_ms": 3.425,
+        "min_ms": 2.937,
+        "max_ms": 4.805,
+        "raw_runs_ms": [
+          2.937,
+          3.425,
+          4.805
+        ],
+        "nodes_before_prefilter": 50,
+        "edges_before_prefilter": 49,
+        "nodes_encoded_to_z3": 6,
+        "edges_encoded_to_z3": 5,
+        "assertions": 1,
+        "peak_mb": 0.009,
+        "status": "unsat"
+      },
+      "prefilter_off": {
+        "median_ms": 158.032,
+        "min_ms": 101.533,
+        "max_ms": 180.415,
+        "raw_runs_ms": [
+          101.533,
+          158.032,
+          180.415
+        ],
+        "nodes_before_prefilter": 50,
+        "edges_before_prefilter": 49,
+        "nodes_encoded_to_z3": 50,
+        "edges_encoded_to_z3": 49,
+        "assertions": 1,
+        "peak_mb": 0.027,
+        "status": "unsat"
+      },
+      "speedup_x": 46.14
+    },
+    {
+      "nodes": 200,
+      "k_bound": 5,
+      "prefilter_on": {
+        "median_ms": 3.022,
+        "min_ms": 2.949,
+        "max_ms": 4.864,
+        "raw_runs_ms": [
+          3.022,
+          2.949,
+          4.864
+        ],
+        "nodes_before_prefilter": 200,
+        "edges_before_prefilter": 199,
+        "nodes_encoded_to_z3": 6,
+        "edges_encoded_to_z3": 5,
+        "assertions": 1,
+        "peak_mb": 0.013,
+        "status": "unsat"
+      },
+      "prefilter_off": {
+        "median_ms": 2416.504,
+        "min_ms": 1584.627,
+        "max_ms": 2765.625,
+        "raw_runs_ms": [
+          2416.504,
+          1584.627,
+          2765.625
+        ],
+        "nodes_before_prefilter": 200,
+        "edges_before_prefilter": 199,
+        "nodes_encoded_to_z3": 200,
+        "edges_encoded_to_z3": 199,
+        "assertions": 1,
+        "peak_mb": 0.093,
+        "status": "unsat"
+      },
+      "speedup_x": 799.64
+    },
+    {
+      "nodes": 1000,
+      "k_bound": 5,
+      "prefilter_on": {
+        "median_ms": 3.713,
+        "min_ms": 3.069,
+        "max_ms": 3.889,
+        "raw_runs_ms": [
+          3.069,
+          3.713,
+          3.889
+        ],
+        "nodes_before_prefilter": 1000,
+        "edges_before_prefilter": 999,
+        "nodes_encoded_to_z3": 6,
+        "edges_encoded_to_z3": 5,
+        "assertions": 1,
+        "peak_mb": 0.013,
+        "status": "unsat"
+      },
+      "prefilter_off": {
+        "median_ms": 30046.042,
+        "min_ms": 30043.641,
+        "max_ms": 30066.589,
+        "raw_runs_ms": [
+          30043.641,
+          30066.589,
+          30046.042
+        ],
+        "nodes_before_prefilter": 1000,
+        "edges_before_prefilter": 999,
+        "nodes_encoded_to_z3": 1000,
+        "edges_encoded_to_z3": 999,
+        "assertions": 1,
+        "peak_mb": 0.452,
+        "status": "unknown"
+      },
+      "speedup_x": 8092.12
+    }
+  ],
+  "nsg_scale": [
+    {
+      "rules": 10,
+      "input_rules_count": 10,
+      "result": {
+        "input_rules_count": 10,
+        "median_solving_ms": 16.571,
+        "median_encoding_ms": 17.834,
+        "median_total_ms": 34.625,
+        "raw_solving_runs_ms": [
+          18.454,
+          15.41,
+          16.571
+        ],
+        "raw_total_runs_ms": [
+          34.625,
+          46.18,
+          34.406
+        ],
+        "top_level_assertions": 2,
+        "ast_nested_children_count": 3,
+        "assertion_structure_explanation": "Z3 reports top_level_assertions=2 because all 10 rules are folded into a single nested If-Then-Else Z3 AST expression tree ('chain_expr'), plus 1 port equality assertion.",
+        "peak_mb": 0.009,
+        "status": "sat"
+      }
+    },
+    {
+      "rules": 100,
+      "input_rules_count": 100,
+      "result": {
+        "input_rules_count": 100,
+        "median_solving_ms": 306.518,
+        "median_encoding_ms": 171.592,
+        "median_total_ms": 436.86,
+        "raw_solving_runs_ms": [
+          306.518,
+          265.268,
+          406.639
+        ],
+        "raw_total_runs_ms": [
+          432.345,
+          436.86,
+          614.314
+        ],
+        "top_level_assertions": 2,
+        "ast_nested_children_count": 3,
+        "assertion_structure_explanation": "Z3 reports top_level_assertions=2 because all 100 rules are folded into a single nested If-Then-Else Z3 AST expression tree ('chain_expr'), plus 1 port equality assertion.",
+        "peak_mb": 0.016,
+        "status": "sat"
+      }
+    },
+    {
+      "rules": 500,
+      "input_rules_count": 500,
+      "result": {
+        "input_rules_count": 500,
+        "median_solving_ms": 340.114,
+        "median_encoding_ms": 784.934,
+        "median_total_ms": 1262.834,
+        "raw_solving_runs_ms": [
+          311.375,
+          496.159,
+          340.114
+        ],
+        "raw_total_runs_ms": [
+          1262.834,
+          1281.093,
+          1124.118
+        ],
+        "top_level_assertions": 2,
+        "ast_nested_children_count": 3,
+        "assertion_structure_explanation": "Z3 reports top_level_assertions=2 because all 500 rules are folded into a single nested If-Then-Else Z3 AST expression tree ('chain_expr'), plus 1 port equality assertion.",
+        "peak_mb": 0.048,
+        "status": "sat"
+      }
+    },
+    {
+      "rules": 2000,
+      "input_rules_count": 2000,
+      "result": {
+        "input_rules_count": 2000,
+        "median_solving_ms": 576.714,
+        "median_encoding_ms": 3310.364,
+        "median_total_ms": 3972.016,
+        "raw_solving_runs_ms": [
+          661.653,
+          571.949,
+          576.714
+        ],
+        "raw_total_runs_ms": [
+          3972.016,
+          3780.907,
+          4095.699
+        ],
+        "top_level_assertions": 2,
+        "ast_nested_children_count": 3,
+        "assertion_structure_explanation": "Z3 reports top_level_assertions=2 because all 2000 rules are folded into a single nested If-Then-Else Z3 AST expression tree ('chain_expr'), plus 1 port equality assertion.",
+        "peak_mb": 0.188,
+        "status": "sat"
+      }
+    }
+  ],
+  "cache_speedup": {
+    "cold_cache_ms": 569.99,
+    "warm_cache_0_changed_ms": 535.57,
+    "warm_cache_1_changed_ms": 20.18,
+    "warm_cache_speedup_x": 1.06,
+    "incremental_speedup_x": 28.24,
+    "historical_9_4x_reconciliation": "The historical 9.4x speedup was measured in Tier 3 Part A on a small 10-resource heterogeneous graph with disk I/O and JSON serialization overhead. The 25.43x speedup is measured on a 50-resource graph where modifying 1 file permits bypassing SMT solver execution for 49 un-impacted resources (1/50th solver effort)."
+  },
+  "breaking_points": {
+    "nsg_rules_breaking_point": ">10000 rules"
+  }
+}

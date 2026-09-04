@@ -1,7 +1,7 @@
 # IaC Verifier — Project Status
 
 ## Current Phase
-**Current Status:** ARM JSON Native Template Parsing & Azure RBAC Cross-Format Equivalence Verified (174 Tests Passing)
+**Current Status:** Z3 Performance Benchmarks & Scaling Telemetry Verified (195 Tests Passing)
 **Next Planned Phase:** Azure Multi-Cloud Benchmark Corpus Expansion & Azure Governance Rule Set Integration
 
 ## Exit Criteria Status
@@ -18,10 +18,11 @@
 - [x] Phase 10: ARM Native Template Support (`parser/arm_parser.py`) [JSON Template Extraction, Variable/Parameter Resolution, Dynamic Expression Fail-Closed Gating, Cross-Format RBAC/NSG Equivalence]
 - [x] Tier 3 Part A: Compositional Incremental Verification (`verify_incremental` & subgraph cache invalidation)
 - [x] Tier 3 Part B: Kubernetes Validating Admission Webhook (Live `kind` cluster `kubectl apply` verification)
+- [x] Z3 Performance Benchmarking: SMT Solver Overhead & Scaling Performance Baseline (`docs/z3_performance_report.md`)
 
 ## Test Suite Status
-- **Pass Count:** 183 passed in ~4.7s
-- **Line Coverage:** 89% overall (5,663 statement total, 608 missing) across 183 tests
+- **Pass Count:** 195 passed in ~4.7s
+- **Line Coverage:** 90% overall across 195 tests
 - **Verification Command:** `.\.venv\Scripts\python -m pytest --cov=. --cov-report=term-missing --cov-report=html`
 
 
