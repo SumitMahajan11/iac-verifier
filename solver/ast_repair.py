@@ -176,8 +176,8 @@ class ASTRepairEngine:
         res_name_clean = res_name.strip('"\'')
 
         if hasattr(tree, "data") and tree.data == "block":
-            children = getattr(tree, "children", [])
-            tokens = [_get_val(c).strip().strip('"\'') for c in children if _get_val(c).strip()]
+            non_body_children = [c for c in getattr(tree, "children", []) if getattr(c, "data", None) != "body"]
+            tokens = [_get_val(c).strip().strip('"\'') for c in non_body_children if _get_val(c).strip()]
             if len(tokens) >= 3:
                 if tokens[0].lower() == "resource" and tokens[1] == res_type_clean and tokens[2] == res_name_clean:
                     return tree
@@ -206,10 +206,12 @@ class ASTRepairEngine:
 
     @staticmethod
     def _unwrap_node(node: Any) -> Any:
-        """Recursively unwraps statement CST nodes until reaching block or attribute tree node."""
+        """Recursively unwraps wrapper CST nodes until reaching block or attribute tree node."""
         if not hasattr(node, "data"):
             return node
-        if node.data == "statement" and hasattr(node, "children"):
+        if hasattr(node, "data") and node.data in ("block", "attribute"):
+            return node
+        if hasattr(node, "children"):
             for sub in node.children:
                 if hasattr(sub, "data"):
                     unwrapped = ASTRepairEngine._unwrap_node(sub)
@@ -234,15 +236,25 @@ class ASTRepairEngine:
 
             # Case 1: Standalone block (ingress { ... }, egress { ... }, security_rule { ... })
             if child.data == "block":
-                tokens = [_get_val(c).strip().strip('"\'') for c in child.children if _get_val(c).strip()]
-                block_id = next((t.lower() for t in tokens[:3] if t.lower() in ("ingress", "egress", "statement", "security_rule", "rule", "rules", "custom_rules")), "")
+                block_id = ""
+                for c in getattr(child, "children", []):
+                    if getattr(c, "data", None) == "body":
+                        continue
+                    v = _get_val(c).strip().strip('"\'').lower()
+                    if v in ("ingress", "egress", "statement", "security_rule", "rule", "rules", "custom_rules"):
+                        block_id = v
+                        break
                 if block_id:
                     statement_nodes.append(child)
 
             # Case 2 & 3: Attributes (ingress = [...], policy = jsonencode(...))
             elif child.data == "attribute":
-                tokens = [_get_val(c).strip().strip('"\'') for c in child.children if _get_val(c).strip()]
-                attr_id = next((t.lower() for t in tokens[:3] if t.lower() in ("ingress", "egress", "security_rule", "rules", "security_rules", "policy", "inline_policy")), "")
+                attr_id = ""
+                for c in getattr(child, "children", []):
+                    v = _get_val(c).strip().strip('"\'').lower()
+                    if v in ("ingress", "egress", "security_rule", "rules", "security_rules", "policy", "inline_policy"):
+                        attr_id = v
+                        break
 
                 # Ingress / Egress list attribute
                 if attr_id in ("ingress", "egress", "security_rule", "rules", "security_rules"):
@@ -277,5 +289,8 @@ class ASTRepairEngine:
                                                     for stmt_elem in tuple_node.children:
                                                         if hasattr(stmt_elem, "data") and stmt_elem.data == "expr_term":
                                                             statement_nodes.append(stmt_elem)
+
+        return statement_nodes
+
 
         return statement_nodes
