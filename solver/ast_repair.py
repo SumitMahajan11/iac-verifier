@@ -110,16 +110,33 @@ class ASTRepairEngine:
                     from lark import Lark
                     return Lark(grammar=grammar, parser="lalr", propagate_positions=True, cache=True)
 
-                # Direct check 5: PARSER_FILE grammar file
+                # Direct check 5: PARSER_FILE grammar / pickled parser file
                 parser_file = getattr(parser_mod, "PARSER_FILE", None)
                 if parser_file is not None:
                     try:
-                        with open(parser_file, "r", encoding="utf-8") as f:
+                        import pickle
+                        with open(parser_file, "rb") as f:
+                            p = pickle.load(f)
+                        if hasattr(p, "parse"):
+                            return p
+                    except Exception as e:
+                        errors.append(f"pickle.load PARSER_FILE failed: {e}")
+
+                    try:
+                        from lark import Lark
+                        p = Lark.load(parser_file)
+                        if hasattr(p, "parse"):
+                            return p
+                    except Exception as e:
+                        errors.append(f"Lark.load PARSER_FILE failed: {e}")
+
+                    try:
+                        with open(parser_file, "r", encoding="utf-8", errors="ignore") as f:
                             grammar_text = f.read()
                         from lark import Lark
                         return Lark(grammar=grammar_text, parser="lalr", propagate_positions=True, cache=True)
                     except Exception as e:
-                        errors.append(f"PARSER_FILE load failed: {e}")
+                        errors.append(f"Text read PARSER_FILE failed: {e}")
 
         except Exception as e:
             errors.append(f"Top-level hcl2 access failed: {e}")
@@ -133,10 +150,16 @@ class ASTRepairEngine:
                 return p
             parser_file = getattr(p_mod, "PARSER_FILE", None)
             if parser_file is not None:
-                with open(parser_file, "r", encoding="utf-8") as f:
-                    grammar_text = f.read()
+                try:
+                    import pickle
+                    with open(parser_file, "rb") as f:
+                        p = pickle.load(f)
+                    if hasattr(p, "parse"):
+                        return p
+                except Exception:
+                    pass
                 from lark import Lark
-                return Lark(grammar=grammar_text, parser="lalr", propagate_positions=True, cache=True)
+                return Lark.load(parser_file)
         except Exception as e:
             errors.append(f"Explicit import hcl2.parser failed: {e}")
 
