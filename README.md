@@ -43,11 +43,13 @@ Static IaC verifier using Z3 for SMT-based reachability proofs on Terraform infr
 * Unaligned host IP addresses (e.g. `10.0.0.5/24`) are normalized to strict network CIDR boundaries (`10.0.0.0/24`).
 
 ### IAM Wildcard Pattern Matching (v1 Scope Boundary)
-* **Supported Wildcard Patterns**:
+* **Supported Wildcard Patterns (SMT String Theory `z3.PrefixOf`)**:
   * Full wildcards: `*`, `*/*`
   * Service wildcards: `s3:*`, `ec2:*`, `iam:*`, etc.
-  * Trailing-prefix wildcards: `arn:aws:s3:::my-bucket/*`
-* **v1 Scope Boundary**: Middle wildcards (e.g. `s3:Get*`) or suffix/arbitrary glob patterns (e.g. `arn:aws:s3:::*-logs`) fall through to exact string matching.
+  * Trailing verb-prefix wildcards: `ec2:Describe*`, `s3:Get*`
+  * Trailing resource-prefix wildcards: `arn:aws:s3:::my-bucket/*`
+* **v1 Fail-Closed Scope Boundary (`Unresolved`)**:
+  * True mid-string wildcards (e.g. `s3:Get*Object`), prefix/middle globs (e.g. `arn:aws:s3:::*-logs`), or pattern wildcards (`?`, `[...]`) fail closed by returning `Unresolved` sentinel rather than executing permissive or partial matching.
 * **Deny Precedence**: Explicit `Deny` statements override `Allow` statements on matching actions and resources while leaving non-denied wildcard permissions active for SMT reachability queries.
 
 ### Privilege Escalation & Trust Graph Design Decisions
