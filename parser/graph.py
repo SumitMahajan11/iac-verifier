@@ -85,6 +85,35 @@ class AzureNsgRule(RuleSource):
     destination_address_prefix: str | list[str] | Unresolved | ResourceReference | None = None
 
 
+@dataclass
+class GcpFirewallRule(RuleSource):
+    """Represents a GCP firewall rule."""
+    
+    name: str | None = None
+    network: str | Unresolved | ResourceReference | None = None
+    direction: str | None = None
+    priority: int | None = None
+    action: str | None = None
+    source_ranges: list[str | Unresolved | ResourceReference] = field(default_factory=list)
+    destination_ranges: list[str | Unresolved | ResourceReference] = field(default_factory=list)
+    source_tags: list[str | Unresolved | ResourceReference] = field(default_factory=list)
+    target_tags: list[str | Unresolved | ResourceReference] = field(default_factory=list)
+    source_service_accounts: list[str | Unresolved | ResourceReference] = field(default_factory=list)
+    target_service_accounts: list[str | Unresolved | ResourceReference] = field(default_factory=list)
+    allowed: list[dict[str, Any]] = field(default_factory=list)
+    denied: list[dict[str, Any]] = field(default_factory=list)
+
+@dataclass
+class GcpIamBinding(RuleSource):
+    """Represents a GCP IAM Binding or Member."""
+    
+    role: str | Unresolved | None = None
+    members: list[str | Unresolved | ResourceReference] = field(default_factory=list)
+    resource_id: str | Unresolved | ResourceReference | None = None
+    resource_type: str | None = None
+
+
+
 
 @dataclass
 class IamPolicyStatement(RuleSource):
@@ -96,6 +125,10 @@ class IamPolicyStatement(RuleSource):
         default_factory=list
     )
     principal: str | dict[str, Any] | Unresolved | ResourceReference | None = None
+    not_actions: list[str | Unresolved] = field(default_factory=list)
+    not_resources: list[str | Unresolved | ResourceReference] = field(
+        default_factory=list
+    )
 
 
 @dataclass

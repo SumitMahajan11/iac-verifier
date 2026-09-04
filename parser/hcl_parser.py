@@ -196,33 +196,68 @@ def _walk_iam_policy_dict(policy_dict: dict[str, Any], raw_expr: Any) -> list[Ia
         effect = _clean_string(str(effect_raw))
 
         actions_raw = stmt.get("Action") or stmt.get("action")
-        if actions_raw is None:
+        not_actions_raw = (
+            stmt.get("NotAction") or stmt.get("not_action") or stmt.get("Notaction")
+        )
+
+        if actions_raw is None and not_actions_raw is None:
             return Unresolved(
-                reason=f"Statement entry missing 'Action' field: '{stmt}'",
-                expression=str(raw_expr),
-            )
-        if isinstance(actions_raw, (str, bytes)):
-            actions = [_clean_string(actions_raw)]
-        elif isinstance(actions_raw, list):
-            actions = [_clean_string(a) for a in actions_raw]
-        else:
-            return Unresolved(
-                reason=f"Statement 'Action' field has invalid type: '{type(actions_raw).__name__}'",
+                reason=f"Statement entry missing 'Action' or 'NotAction' field: '{stmt}'",
                 expression=str(raw_expr),
             )
 
+        actions: list[str | Unresolved] = []
+        if actions_raw is not None:
+            if isinstance(actions_raw, (str, bytes)):
+                actions = [_clean_string(actions_raw)]
+            elif isinstance(actions_raw, list):
+                actions = [_clean_string(a) for a in actions_raw]
+            else:
+                return Unresolved(
+                    reason=f"Statement 'Action' field has invalid type: '{type(actions_raw).__name__}'",
+                    expression=str(raw_expr),
+                )
+
+        not_actions: list[str | Unresolved] = []
+        if not_actions_raw is not None:
+            if isinstance(not_actions_raw, (str, bytes)):
+                not_actions = [_clean_string(not_actions_raw)]
+            elif isinstance(not_actions_raw, list):
+                not_actions = [_clean_string(a) for a in not_actions_raw]
+            else:
+                return Unresolved(
+                    reason=f"Statement 'NotAction' field has invalid type: '{type(not_actions_raw).__name__}'",
+                    expression=str(raw_expr),
+                )
+
         resources_raw = stmt.get("Resource") or stmt.get("resource")
-        if resources_raw is None:
-            resources = []
-        elif isinstance(resources_raw, (str, bytes)):
-            resources = [_clean_string(resources_raw)]
-        elif isinstance(resources_raw, list):
-            resources = [_clean_string(r) for r in resources_raw]
-        else:
-            return Unresolved(
-                reason=f"Statement 'Resource' field has invalid type: '{type(resources_raw).__name__}'",
-                expression=str(raw_expr),
-            )
+        not_resources_raw = (
+            stmt.get("NotResource") or stmt.get("not_resource") or stmt.get("Notresource")
+        )
+
+        resources: list[str | Unresolved | ResourceReference] = []
+        if resources_raw is not None:
+            if isinstance(resources_raw, (str, bytes)):
+                resources = [_clean_string(resources_raw)]
+            elif isinstance(resources_raw, list):
+                resources = [_clean_string(r) for r in resources_raw]
+            else:
+                return Unresolved(
+                    reason=f"Statement 'Resource' field has invalid type: '{type(resources_raw).__name__}'",
+                    expression=str(raw_expr),
+                )
+
+        not_resources: list[str | Unresolved | ResourceReference] = []
+        if not_resources_raw is not None:
+            if isinstance(not_resources_raw, (str, bytes)):
+                not_resources = [_clean_string(not_resources_raw)]
+            elif isinstance(not_resources_raw, list):
+                not_resources = [_clean_string(r) for r in not_resources_raw]
+            else:
+                return Unresolved(
+                    reason=f"Statement 'NotResource' field has invalid type: '{type(not_resources_raw).__name__}'",
+                    expression=str(raw_expr),
+                )
 
         principal_raw = stmt.get("Principal") or stmt.get("principal")
         principal = _clean_principal(principal_raw)
@@ -233,6 +268,8 @@ def _walk_iam_policy_dict(policy_dict: dict[str, Any], raw_expr: Any) -> list[Ia
                 actions=actions,
                 resources=resources,
                 principal=principal,
+                not_actions=not_actions,
+                not_resources=not_resources,
             )
         )
 
@@ -389,7 +426,13 @@ def _extract_azure_nsg_rules(blocks: Any) -> list[AzureNsgRule]:
 
 def extract_rule_sources(res_type: str, processed_attrs: dict[str, Any]) -> list[RuleSource]:
     """Extracts RuleSource objects from processed resource attributes based on resource type."""
+    from parser.gcp_parser import extract_gcp_rule_sources
+    
     rule_sources: list[RuleSource] = []
+
+    if res_type.startswith("google_"):
+        return extract_gcp_rule_sources(res_type, processed_attrs)
+
 
     if res_type == "aws_security_group":
         ingress_blocks = processed_attrs.get("ingress")
@@ -421,7 +464,15 @@ def extract_rule_sources(res_type: str, processed_attrs: dict[str, Any]) -> list
                 referenced_security_group_id=ref_sg if not isinstance(ref_sg, str) else _clean_string(ref_sg),
             )
         )
-    elif res_type in ("aws_iam_policy", "aws_iam_role_policy", "aws_s3_bucket_policy"):
+    elif res_type in (
+        "aws_iam_policy",
+        "aws_iam_role_policy",
+        "aws_iam_user_policy",
+        "aws_iam_group_policy",
+        "aws_s3_bucket_policy",
+        "aws_sqs_queue_policy",
+        "aws_sns_topic_policy",
+    ):
         policy_val = processed_attrs.get("policy")
         if policy_val:
             parsed = _parse_iam_policy_statements(policy_val)
@@ -474,8 +525,6 @@ def extract_rule_sources(res_type: str, processed_attrs: dict[str, Any]) -> list
                 destination_address_prefix=processed_attrs.get("destination_address_prefix") or processed_attrs.get("destination_address_prefixes"),
             )
         )
-
-    return rule_sources
 
     return rule_sources
 

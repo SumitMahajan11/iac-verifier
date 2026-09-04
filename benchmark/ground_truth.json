@@ -208,7 +208,7 @@
     {
         "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
         "resource_id": "aws_iam_role_policy.inline_role_policy",
-        "expected_engine_state": "UNRESOLVABLE",
+        "expected_engine_state": "SAT",
         "vulnerability_class": "IAM_WILDCARD_GRANT"
     },
     {
@@ -251,14 +251,14 @@
         "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
         "resource_id": "aws_iam_user_policy.inline_user_policy",
         "vulnerability_class": "IAM_WILDCARD_GRANT",
-        "expected_engine_state": "UNSAT"
+        "expected_engine_state": "SAT"
     },
     {
         "corpus": "sadcloud",
         "file": "fixtures/corpora/sadcloud/modules/aws/iam/main.tf",
         "resource_id": "aws_iam_group_policy.inline_group_policy",
         "vulnerability_class": "IAM_WILDCARD_GRANT",
-        "expected_engine_state": "UNSAT"
+        "expected_engine_state": "SAT"
     },
     {
         "corpus": "sadcloud",

@@ -171,3 +171,28 @@ def test_unresolved_statement_propagates_fail_closed():
     res = encode_iam_scope_symbolic(stmts, scope_id="test5")
     assert isinstance(res, Unresolved)
     assert "unresolved policy statement" in res.reason.lower()
+
+
+def test_not_action_encoding():
+    """
+    Verifies that a policy using NotAction (e.g. Allow on NotAction ['ec2:*'] on Resource '*')
+    is correctly encoded as SAT (vulnerable wildcard grant).
+    """
+    stmts = [
+        IamPolicyStatement(
+            effect="Allow",
+            not_actions=["ec2:*"],
+            resources=["*"],
+        )
+    ]
+    res = encode_iam_scope_symbolic(stmts, scope_id="not_action_test")
+    assert not isinstance(res, Unresolved)
+    act_var, res_var, unsafe_expr = res
+
+    solver = z3.Solver()
+    solver.add(unsafe_expr)
+    assert solver.check() == z3.sat
+    m = solver.model()
+    action_val = str(m[act_var]).strip('"')
+    assert not action_val.startswith("ec2:")
+

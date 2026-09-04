@@ -59,16 +59,25 @@ def make_statement_match_expr(
 ) -> z3.BoolRef:
     """
     Encodes an IamPolicyStatement into a symbolic Z3 String expression asserting
-    that (action_var, resource_var) is matched by the statement's actions and resources.
+    that (action_var, resource_var) is matched by the statement's actions/not_actions and resources/not_resources.
     """
-    action_exprs = [make_action_match_expr(action_var, act) for act in stmt.actions]
-    action_match = z3.Or(action_exprs) if action_exprs else z3.BoolVal(False)
-
-    if not stmt.resources:
-        resource_match = z3.BoolVal(True)
+    if stmt.actions:
+        action_exprs = [make_action_match_expr(action_var, act) for act in stmt.actions]
+        action_match = z3.Or(action_exprs)
+    elif stmt.not_actions:
+        not_action_exprs = [make_action_match_expr(action_var, act) for act in stmt.not_actions]
+        action_match = z3.Not(z3.Or(not_action_exprs))
     else:
+        action_match = z3.BoolVal(True)
+
+    if stmt.resources:
         resource_exprs = [make_resource_match_expr(resource_var, res) for res in stmt.resources]
         resource_match = z3.Or(resource_exprs)
+    elif stmt.not_resources:
+        not_resource_exprs = [make_resource_match_expr(resource_var, res) for res in stmt.not_resources]
+        resource_match = z3.Not(z3.Or(not_resource_exprs))
+    else:
+        resource_match = z3.BoolVal(True)
 
     return z3.And(action_match, resource_match)
 
@@ -119,8 +128,19 @@ def encode_iam_scope_symbolic(
             deny_exprs.append(stmt_match)
         elif stmt.effect.lower() == "allow":
             # Check if this Allow statement is granted via a wildcard pattern (Action '*' or 's3:*', or Resource '*')
-            has_act_wildcard = any(is_full_wildcard_action(act) for act in stmt.actions)
-            has_res_wildcard = any(is_full_wildcard_resource(res) for res in stmt.resources) or not stmt.resources
+            if stmt.actions:
+                has_act_wildcard = any(is_full_wildcard_action(act) for act in stmt.actions)
+            elif stmt.not_actions:
+                has_act_wildcard = not any(is_full_wildcard_action(act) for act in stmt.not_actions)
+            else:
+                has_act_wildcard = True
+
+            if stmt.resources:
+                has_res_wildcard = any(is_full_wildcard_resource(res) for res in stmt.resources)
+            elif stmt.not_resources:
+                has_res_wildcard = not any(is_full_wildcard_resource(res) for res in stmt.not_resources)
+            else:
+                has_res_wildcard = True
 
             if has_act_wildcard or has_res_wildcard:
                 wildcard_allow_exprs.append(stmt_match)

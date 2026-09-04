@@ -1,7 +1,7 @@
 # IaC Verifier — Project Status
 
 ## Current Phase
-**Current Status:** Phase 11 Azure Governance Benchmark & Policy Encoder Verified (210 Tests Passing, 1.0 Precision/Recall)
+**Current Status:** Phase 11 Azure Governance Benchmark & Policy Encoder Verified (211 Tests Passing, 1.0 Precision/Recall)
 **Next Planned Phase:** Pause new scope expansion; focus exclusively on re-grounding existing claims and independent audit.
 
 ## Exit Criteria Status
@@ -27,8 +27,8 @@
 *Note on GCP Status: GCP parser scaffolding (`parser/gcp_parser.py`) is implemented for AST graph ingestion. SMT verification encoding for GCP is explicitly paused/deferred per ADR guidelines ("Azure real-world gap must be closed before GCP SMT solver implementation"). GCP SMT encoder functions remain unbuilt stub signatures (0% SMT precision/recall coverage).
 
 ## Test Suite Status
-- **Pass Count:** 210 passed in ~7.4s
-- **Line Coverage:** 89% overall across 210 tests
+- **Pass Count:** 211 passed in ~7.4s
+- **Line Coverage:** 89% overall across 211 tests
 - **Verification Command:** `python -m pytest --cov=. --cov-report=term-missing`
 
 
