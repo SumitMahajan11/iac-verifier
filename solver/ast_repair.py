@@ -219,10 +219,11 @@ class ASTRepairEngine:
                 continue
 
             # Unwrap statement wrapper node if Lark CST wraps block/attribute in a statement node
-            if child.data == "statement" and hasattr(child, "children") and len(child.children) > 0:
-                inner = child.children[0]
-                if hasattr(inner, "data"):
-                    child = inner
+            if child.data == "statement" and hasattr(child, "children"):
+                for sub in child.children:
+                    if hasattr(sub, "data") and sub.data in ("block", "attribute"):
+                        child = sub
+                        break
 
             # Case 1: Standalone block (ingress { ... }, egress { ... }, security_rule { ... })
             if child.data == "block":
