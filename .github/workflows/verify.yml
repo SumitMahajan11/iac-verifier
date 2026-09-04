@@ -31,9 +31,9 @@ jobs:
           pip install z3-solver python-hcl2 pyyaml structlog prometheus-client fastapi uvicorn cryptography httpx pytest pytest-cov
           pip install -e .
 
-      - name: Run Full Pytest Suite
+      - name: Run Full Pytest Suite with Coverage Enforcement
         run: |
-          pytest -v
+          pytest --cov=. --cov-report=term-missing --cov-fail-under=85 -v
 
   iac-verify:
     name: Verify Terraform Security Invariants
